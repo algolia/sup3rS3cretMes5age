@@ -13,6 +13,7 @@ func main() {
 	e.POST("/secret", ot.CreateMsgHandler)
 	e.File("/msg", "static/index.html")
 	e.File("/getmsg", "static/getmsg.html")
+	e.Static("/static", "static")
 
 	e.Logger.Fatal(e.Start(":1234"))
 }
