@@ -14,6 +14,7 @@
     <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/1.6.1/clipboard.min.js"></script>
     <link rel="stylesheet" href="/static/application.css">
+    <main class="send">
     <div class="container">
         <h1>Secret Message</h1>
         <p class="subtitle">Get your secret one-time read only message</p>
@@ -29,6 +30,7 @@
             </button>
         </div>
     </div>
+    </main>
 
 
     <script type="text/javascript">
@@ -59,20 +61,6 @@
         }
 
 
-        clipboard.on('error', function (e) {
-            console.error('Action:', e.action);
-            console.error('Trigger:', e.trigger);
-        });
-
-        function getParameterByName(name, url) {
-            if (!url) url = window.location.href;
-            name = name.replace(/[\[\]]/g, "\\$&");
-            var regex = new RegExp("[?&]" + name + "(=([^&#]*)|&|#|$)"),
-                results = regex.exec(url);
-            if (!results) return null;
-            if (!results[2]) return '';
-            return decodeURIComponent(results[2].replace(/\+/g, " "));
-        }
     </script>
 </body>
 

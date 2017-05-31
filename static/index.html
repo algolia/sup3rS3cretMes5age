@@ -4,7 +4,7 @@
 <head>
   <!--Let browser know website is optimized for mobile-->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link href="https://fonts.googleapis.com/css?family=Montserrat;300,400,500,600" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Montserrat" rel="stylesheet">
   <link rel="stylesheet" href="/static/application.css">
 </head>
 
@@ -14,7 +14,7 @@
       <h1>Secret Message</h1>
       <p class="subtitle">Send a secret one-time read only message</p>
       <div class="container">
-        <form id="secretform" action="/secret" method="POST">
+        <form id="secretform" action="/no-internet" method="POST">
           <div class="input-field">
             <textarea id="textarea1" name="msg" placeholder="Paste your message here" required="required"></textarea>
           </div>
@@ -52,7 +52,7 @@ frm.submit(function(e) {
 
   $.ajax({
     type: frm.attr('method'),
-    url: frm.attr('action'),
+    url: '/secret',
     data: frm.serialize(),
     success: function(data) {
       $('.success-encrypted').css({
