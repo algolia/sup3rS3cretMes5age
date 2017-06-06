@@ -38,3 +38,7 @@ func (o *OTSecretSvc) GetMsgHandler(ctx echo.Context) error {
 	}
 	return ctx.JSON(http.StatusOK, m)
 }
+
+func (o *OTSecretSvc) HealthHandler(ctx echo.Context) error {
+	return ctx.String(http.StatusOK, "OK")
+}

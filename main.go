@@ -9,6 +9,7 @@ func main() {
 
 	e := echo.New()
 
+	e.Any("/health", ot.HealthHandler)
 	e.GET("/secret", ot.GetMsgHandler)
 	e.POST("/secret", ot.CreateMsgHandler)
 	e.File("/msg", "static/index.html")
