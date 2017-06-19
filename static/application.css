@@ -53,8 +53,9 @@ button {
 
 .container {
   position: relative;
-  width: 500px;
   margin: 0 auto;
+  max-width: 500px;
+  width: 100vw;
 }
 
 .encrypt{
