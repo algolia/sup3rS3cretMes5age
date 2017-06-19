@@ -15,9 +15,10 @@
       <p class="subtitle">Send a secret one-time read only message</p>
       <div class="container">
         <form id="secretform" action="/no-internet" method="POST" enctype="multipart/form-data">
-         Upload Secret Files: <input type="file" name="file" size=25></br></br>
 
           <div class="input-field">
+         Upload Secret Files: <input id='file-input' type="file" name="file" size=25></br></br>
+            
             <textarea id="textarea1" name="msg" placeholder="Paste your message here" required="required"></textarea>
           </div>
           <div class="button_wrapper">
@@ -28,7 +29,7 @@
         </form>
         <div class="divider"></div>
         <div class="success-encrypted">
-          <div class="input-field">
+          <div class="output-field">
             <textarea id="url" class="textarea" readonly=true></textarea>
           </div>
           <div class="button">
@@ -75,7 +76,7 @@ frm.submit(function(e) {
         visibility: "hidden"
       })
 
-      $('#textara1').css({
+      $('.input-field').css({
         opacity: 0,
         visibility: "hidden",
         pointerEvents: "none"
