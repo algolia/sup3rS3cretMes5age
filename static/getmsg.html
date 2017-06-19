@@ -15,21 +15,21 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/1.6.1/clipboard.min.js"></script>
     <link rel="stylesheet" href="/static/application.css">
     <main class="send">
-    <div class="container">
-        <h1>Secret Message</h1>
-        <p class="subtitle">Get your secret one-time read only message</p>
-        <div class="input-field">
+        <div class="container">
+            <h1>Secret Message</h1>
+            <p class="subtitle">Get your secret one-time read only message</p>
+            <div class="input-field">
 
 
-            <textarea id="textarea1" name="msg" readonly=true class="materialize-textarea" placeholder="Message should apper here"></textarea>
+                <textarea id="textarea1" name="msg" readonly=true class="materialize-textarea" placeholder="Message should apper here"></textarea>
 
-        </div>
-        <div class="button">
-            <button class="btn" type="submit" data-clipboard-target="#textarea1"  name="action">Copy to clipboard
+            </div>
+            <div class="button">
+                <button class="btn" type="submit" data-clipboard-target="#textarea1" name="action">Copy to clipboard
               
             </button>
+            </div>
         </div>
-    </div>
     </main>
 
 
@@ -38,14 +38,14 @@
             new Clipboard('.btn');
 
             let params = (new URL(window.location)).searchParams;
-            console.log(window.location.origin + "/secret?token=" + params.get('token'))
+            console.log(window.location.origin + "/secret?token=" + params.get('token') + "&filetoken=" + params.get('filetoken') + "&filename=" + params.get('filename') );
             $.ajax({
                 type: "GET",
                 url: window.location.origin + "/secret?token=" + params.get('token'),
                 success: function (data) {
                     console.log('Submission was successful.');
                     console.log(data);
-                    showMsg(data.msg)
+                    showMsg(data.msg, params.get('filetoken'), params.get('filename'))
                 },
                 error: function (data) {
                     console.log('An error occurred.');
@@ -55,18 +55,49 @@
             });
         });
 
-        function showMsg(msg) {
+        function showMsg(msg, filetoken, filename) {
             $('#pbar').hide()
             $('#textarea1').text(msg)
+            if (filetoken) {
+                console.log('filedata=', filetoken)
+
+                getSecret(filetoken, filename)
+            }
         }
+
+        function getSecret(token, name) {
+            fetch(window.location.origin + "/secret?token=" + token, {
+                method: 'get'
+            }).then(function (response) {
+                saveData(response.msg, name)
+
+            }).catch(function (err) {
+                console.error(err)
+            });
+        }
+
+        var saveData = (function () {
+            var a = document.createElement("a");
+            document.body.appendChild(a);
+            a.style = "display: none";
+            return function (data, fileName) {
+                var json = JSON.stringify(data),
+                    blob = new Blob([json], { type: "octet/stream" }),
+                    url = window.URL.createObjectURL(blob);
+                a.href = url;
+                a.download = fileName;
+                a.click();
+                window.URL.revokeObjectURL(url);
+            };
+        }());  
 
 
     </script>
     <!-- Facebook/Slack Meta Tags-->
-	<meta property="og:title" content="Self Destructing Secure Message"/>
-	<meta property="og:image" content="https://github.com/eranchetz/secretMsg"/>
-	<meta property="og:site_name" content="secureMsg"/>
-	<meta property="og:description" content="A self destructing one time secure msg service, have fun, stay secure!"/>
+    <meta property="og:title" content="Self Destructing Secure Message" />
+    <meta property="og:image" content="https://github.com/eranchetz/secretMsg" />
+    <meta property="og:site_name" content="secureMsg" />
+    <meta property="og:description" content="A self destructing one time secure msg service, have fun, stay secure!" />
 </body>
 
 </html>

@@ -14,7 +14,9 @@
       <h1>Secret Message</h1>
       <p class="subtitle">Send a secret one-time read only message</p>
       <div class="container">
-        <form id="secretform" action="/no-internet" method="POST">
+        <form id="secretform" action="/no-internet" method="POST" enctype="multipart/form-data">
+         Upload Secret Files: <input type="file" name="file" size=25></br></br>
+
           <div class="input-field">
             <textarea id="textarea1" name="msg" placeholder="Paste your message here" required="required"></textarea>
           </div>
@@ -37,6 +39,7 @@
         </div>
       </div>
     </div>
+
   </main>
 </body>
 <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
@@ -50,10 +53,15 @@ frm.submit(function(e) {
   e.preventDefault();
   if(this.val === "") return false;
 
+
+  var form = new FormData($("#secretform")[0]);
   $.ajax({
-    type: frm.attr('method'),
+    type: 'POST',
     url: '/secret',
-    data: frm.serialize(),
+    processData: false,  // Important!
+    contentType: false,
+    cache: false,
+    data: form,
     success: function(data) {
       $('.success-encrypted').css({
         opacity: 1,
@@ -72,7 +80,7 @@ frm.submit(function(e) {
         visibility: "hidden",
         pointerEvents: "none"
       })
-      showURL(data.token);
+      showURL(data.token, data.filetoken , data.filename);
     },
     error: function(data) {
     
@@ -80,8 +88,12 @@ frm.submit(function(e) {
   });
 });
 
-function showURL(token) {
-  $('#url').text(window.location.origin + "/getmsg?token=" + token)
+function showURL(token, filetoken, filename ) {
+  if (filetoken) {
+    $('#url').text(window.location.origin + "/getmsg?token=" + token + "&filetoken=" + filetoken + "&filename=" + filename)
+    return
+  }
+   $('#url').text(window.location.origin + "/getmsg?token=" + token)
 }
 </script>
 

@@ -2,12 +2,18 @@ package main
 
 import (
 	"github.com/labstack/echo"
+	"github.com/labstack/echo/middleware"
 )
 
 func main() {
 	ot := NewOTSecretService()
 
 	e := echo.New()
+	e.Use(middleware.Logger())
+	e.Use(middleware.BodyLimit("50M"))
+
+	e.GET("/", redirect)
+	e.File("/robots.txt", "static/robots.txt")
 
 	e.Any("/health", ot.HealthHandler)
 	e.GET("/secret", ot.GetMsgHandler)
