@@ -1,8 +1,11 @@
 package main
 
-import "fmt"
-import vault "github.com/hashicorp/vault/api"
-import "log"
+import (
+	"fmt"
+	"log"
+
+	vault "github.com/hashicorp/vault/api"
+)
 
 func CreateSecretMsg(o *OTSecretSvc, msg []byte) (token []byte, err error) {
 	token, err = createOneTimeToken(o)
@@ -46,7 +49,7 @@ func writeMsgToVault(token, msg []byte) error {
 
 	raw := map[string]interface{}{"msg": string(msg)}
 
-	log.Println("writting message to vault at /cubbyhole/", string(token))
+	log.Printf("writting message to vault at /cubbyhole/%s", string(token))
 	otc.Logical().Write("/cubbyhole/"+string(token), raw)
 
 	return nil
@@ -61,7 +64,7 @@ func GetSecretMsg(token []byte) (msg []byte, err error) {
 }
 
 func getMessageFromVault(token []byte) (msg []byte, err error) {
-	log.Println("getting msg with token :  ", token)
+	log.Println("getting msg with token :  ", string(token))
 	otc, err := vault.NewClient(vault.DefaultConfig())
 	otc.SetToken(string(token))
 	if err != nil {
