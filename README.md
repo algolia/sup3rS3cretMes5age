@@ -2,14 +2,20 @@
 
 A simple secure self destructing service message server, using hashicorp vault as a backend
 
+![self destrcut](https://media.giphy.com/media/LBlyAAFJ71eMw/giphy.gif)
 
 ### Run localy 
 
+#### Prequisites
 
+* [Go](https://golang.org/doc/install)
+* [Docker](https://docs.docker.com/engine/installation/)
+
+#### Installing
 
 * run hashicorp vault server 
 
-    ` docker run -d --cap-add=IPC_LOCK -ti -p 8200:8200   --name vault vault `
+    ` docker run -ti --cap-add=IPC_LOCK -ti -p 8200:8200   --name vault vault `
 
 * set vault environment variable 
 
@@ -20,9 +26,26 @@ A simple secure self destructing service message server, using hashicorp vault a
 
 * run the secretMsg service
   ```shell
-  go get ; go run *.go 
+  git clone https://github.com/eranchetz/secretMsg
+  go get
+  go run *.go
 	```
 
-* use it!
+* try it!
 
-	`http://localhost:1234/msg`
+   `http://localhost:1234/msg`
+	
+	
+### Security notice!
+ You should always run this behind SSL/TLS, otherwise message will be sent unencrypted!
+
+
+### Screenshot
+
+<img width="610" alt="secretmsg" src="https://user-images.githubusercontent.com/357094/29357449-e9268adc-8277-11e7-8fef-b1eabfe62444.png">
+
+### Contributing
+
+Pull reqesuts are very welcome!
+
+
