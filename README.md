@@ -1,6 +1,6 @@
 # secretMsg
 
-A simple secure self destructing service message server, using hashicorp vault as a backend
+A simple secure self destructing message service, using hashicorp vault as a backend
 
 ![self destrcut](https://media.giphy.com/media/LBlyAAFJ71eMw/giphy.gif)
 
