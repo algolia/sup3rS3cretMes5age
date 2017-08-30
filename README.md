@@ -20,8 +20,8 @@ A simple secure self destructing message service, using hashicorp vault as a bac
 * set vault environment variable 
 
    ```shell 
-    export VAULT_ADDR=http://localhost:8200 
-    export VAULT_TOKEN=<token_from_vault_server_log> 
+    export VAULT_ADDR=http://localhost:8200
+    export VAULT_TOKEN=$(docker logs vault | grep Token | awk '{print $NF}')
    ```
 
 * run the secretMsg service
