@@ -26,7 +26,7 @@ A simple secure self destructing message service, using hashicorp vault as a bac
 
 * run the secretMsg service
   ```shell
-  git clone https://github.com/eranchetz/secretMsg
+  git clone https://github.com/algolia/sup3rS3cretMes5age.git
   go get
   go run *.go
 	```
