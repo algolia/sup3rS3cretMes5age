@@ -1,4 +1,4 @@
-# secretMsg
+# sup3rS3cretMes5age!
 
 A simple secure self destructing message service, using hashicorp vault as a backend
 
