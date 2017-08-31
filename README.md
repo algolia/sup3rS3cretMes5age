@@ -46,6 +46,6 @@ A simple secure self destructing message service, using hashicorp vault as a bac
 
 ### Contributing
 
-Pull reqesuts are very welcome!
+Pull requests are very welcome!
 
 
