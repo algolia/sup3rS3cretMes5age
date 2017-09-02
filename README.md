@@ -15,29 +15,29 @@ A simple, secure self-destructing message service, using HashiCorp Vault product
 
 * run hashicorp vault server 
 
-```shell
+    ```shell
     docker run -ti --cap-add=IPC_LOCK -ti -p 8200:8200   --name vault vault
-```
+    ```
 
 * set vault environment variable 
 
-```shell 
+    ```shell 
     export VAULT_ADDR=http://localhost:8200
     export VAULT_TOKEN=$(docker logs vault | grep Token | awk '{print $NF}')
-```
+    ```
 
 * run the secretMsg service
-```shell
+    ```shell
     git clone https://github.com/algolia/sup3rS3cretMes5age.git
     go get
     go run *.go
-```
+    ```
 
 * try it!
 
-```shell
+    ```shell
     http://localhost:1234/msg
-```
+    ```
     
     
 ### Security notice!
