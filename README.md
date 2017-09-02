@@ -15,7 +15,9 @@ A simple, secure self-destructing message service, using HashiCorp Vault product
 
 * run hashicorp vault server 
 
-`docker run -ti --cap-add=IPC_LOCK -ti -p 8200:8200   --name vault vault`
+```shell
+    docker run -ti --cap-add=IPC_LOCK -ti -p 8200:8200   --name vault vault
+```
 
 * set vault environment variable 
 
@@ -33,7 +35,9 @@ A simple, secure self-destructing message service, using HashiCorp Vault product
 
 * try it!
 
-`http://localhost:1234/msg`
+```shell
+    http://localhost:1234/msg
+```
     
     
 ### Security notice!
