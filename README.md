@@ -1,14 +1,14 @@
 # sup3rS3cretMes5age!
 
-A simple secure self destructing message service, using hashicorp vault as a backend
+A simple, secure self-destructing message service, using HashiCorp Vault product as a backend.
 
-![self destrcut](https://media.giphy.com/media/LBlyAAFJ71eMw/giphy.gif)
+![self-destruct](https://media.giphy.com/media/LBlyAAFJ71eMw/giphy.gif)
 
 Read more about the reasoning behind this project in the [relevant](https://blog.algolia.com/secure-tool-for-one-time-self-destructing-messages/) blog post.
 
-### Run localy 
+### Run locally 
 
-#### Prequisites
+#### Prerequisites
 
 * [Go](https://golang.org/doc/install)
 * [Docker](https://docs.docker.com/engine/installation/)
@@ -17,29 +17,34 @@ Read more about the reasoning behind this project in the [relevant](https://blog
 
 * run hashicorp vault server 
 
-    ` docker run -ti --cap-add=IPC_LOCK -ti -p 8200:8200   --name vault vault `
+    ```shell
+    docker run -ti --cap-add=IPC_LOCK -ti -p 8200:8200   --name vault vault
+    ```
 
 * set vault environment variable 
 
-   ```shell 
+    ```shell 
     export VAULT_ADDR=http://localhost:8200
     export VAULT_TOKEN=$(docker logs vault | grep Token | awk '{print $NF}')
-   ```
+    ```
 
 * run the secretMsg service
-  ```shell
-  git clone https://github.com/algolia/sup3rS3cretMes5age.git
-  go get
-  go run *.go
-	```
+    ```shell
+    git clone https://github.com/algolia/sup3rS3cretMes5age.git
+    go get
+    go run *.go
+    ```
 
 * try it!
 
-   `http://localhost:1234/msg`
-	
-	
+    ```shell
+    http://localhost:1234/msg
+    ```
+    
+    
 ### Security notice!
- You should always run this behind SSL/TLS, otherwise message will be sent unencrypted!
+
+You should always run this behind SSL/TLS; otherwise, a message will be sent unencrypted!
 
 
 ### Screenshot
@@ -49,5 +54,3 @@ Read more about the reasoning behind this project in the [relevant](https://blog
 ### Contributing
 
 Pull requests are very welcome!
-
-
