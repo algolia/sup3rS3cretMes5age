@@ -4,6 +4,8 @@ A simple secure self destructing message service, using hashicorp vault as a bac
 
 ![self destrcut](https://media.giphy.com/media/LBlyAAFJ71eMw/giphy.gif)
 
+Read more about the reasoning behind this project in the [relevant](https://blog.algolia.com/secure-tool-for-one-time-self-destructing-messages/) blog post.
+
 ### Run localy 
 
 #### Prequisites
