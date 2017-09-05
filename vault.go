@@ -9,7 +9,10 @@ import (
 
 func CreateSecretMsg(o *OTSecretSvc, msg []byte) (token []byte, err error) {
 	token, err = createOneTimeToken(o)
-	log.Println("writing msg ", string(msg), "with token", string(token))
+	if err != nil {
+		return nil, err
+	}
+	log.Println("writing msg", string(msg), "with token", string(token))
 	err = writeMsgToVault(token, msg)
 	if err != nil {
 		return nil, err
@@ -33,6 +36,7 @@ func createOneTimeToken(o *OTSecretSvc) ([]byte, error) {
 	})
 	if err != nil {
 		fmt.Println(err)
+		return nil, err
 	}
 	log.Println("got one time token : ", string([]byte(sec.Auth.ClientToken)))
 	return []byte(sec.Auth.ClientToken), err
@@ -49,7 +53,7 @@ func writeMsgToVault(token, msg []byte) error {
 
 	raw := map[string]interface{}{"msg": string(msg)}
 
-	log.Printf("writting message to vault at /cubbyhole/%s", string(token))
+	log.Printf("writing message to vault at /cubbyhole/%s", string(token))
 	otc.Logical().Write("/cubbyhole/"+string(token), raw)
 
 	return nil

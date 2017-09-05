@@ -12,8 +12,8 @@ import (
 
 type TokenResponse struct {
 	Token     string `json:"token"`
-	FileToken string `json:"filetoken",omitempty`
-	FileName  string `json:"filename",omitempty`
+	FileToken string `json:"filetoken,omitempty"`
+	FileName  string `json:"filename,omitempty"`
 }
 
 type MsgReposne struct {
@@ -50,7 +50,7 @@ func (o *OTSecretSvc) CreateMsgHandler(ctx echo.Context) error {
 
 	// Handle the secret message
 	msg := ctx.FormValue("msg")
-	log.Println("msg recieved ", msg)
+	log.Println("msg received", msg)
 	token, err := CreateSecretMsg(o, []byte(msg))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "cannot create msg "+err.Error())
