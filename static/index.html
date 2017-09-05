@@ -44,57 +44,51 @@
   </main>
 </body>
 <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/1.6.1/clipboard.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/1.7.1/clipboard.min.js"></script>
 <script type="text/javascript">
-new Clipboard('.btn');
-var frm = $('#secretform');
+new Clipboard(".btn");
 
-frm.submit(function(e) {
-
+$("#secretform").submit(function(e) {
   e.preventDefault();
-  if(this.val === "") return false;
+  if (this.val === "") return false;
+  const form = new FormData($("#secretform")[0]);
 
-
-  var form = new FormData($("#secretform")[0]);
   $.ajax({
-    type: 'POST',
-    url: '/secret',
-    processData: false,  // Important!
+    type: "POST",
+    url: "/secret",
+    processData: false, // Important!
     contentType: false,
     cache: false,
     data: form,
-    success: function(data) {
-      $('.success-encrypted').css({
+    success(data) {
+      $(".success-encrypted").css({
         opacity: 1,
         pointerEvents: "auto",
-        visibility: "visible",
-      })
-
-      $('.encrypt').css({
+        visibility: "visible"
+      });
+      $(".encrypt").css({
         opacity: 0,
         pointerEvents: "none",
         visibility: "hidden"
-      })
-
-      $('.input-field').css({
+      });
+      $(".input-field").css({
         opacity: 0,
         visibility: "hidden",
         pointerEvents: "none"
-      })
-      showURL(data.token, data.filetoken , data.filename);
-    },
-    error: function(data) {
-    
-    },
+      });
+      showURL(data.token, data.filetoken, data.filename);
+    }
   });
 });
 
-function showURL(token, filetoken, filename ) {
+function showURL(token, filetoken, filename) {
   if (filetoken) {
-    $('#url').text(window.location.origin + "/getmsg?token=" + token + "&filetoken=" + filetoken + "&filename=" + filename)
-    return
+    $("#url").text(
+      `${window.location.origin}/getmsg?token=${token}&filetoken=${filetoken}&filename=${filename}`
+    );
+    return;
   }
-   $('#url').text(window.location.origin + "/getmsg?token=" + token)
+  $("#url").text(`${window.location.origin}/getmsg?token=${token}`);
 }
 </script>
 
