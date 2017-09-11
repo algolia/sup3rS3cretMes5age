@@ -21,7 +21,7 @@ clean:
 	@docker-compose rm -fv
 
 run: clean build
-	@docker-compose up --build -d
+	@docker-compose up --build
 
 stop:
 	@docker-compose stop

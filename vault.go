@@ -1,83 +1,78 @@
 package main
 
 import (
-	"fmt"
-	"log"
-
 	vault "github.com/hashicorp/vault/api"
 )
 
-func CreateSecretMsg(o *OTSecretSvc, msg []byte) (token []byte, err error) {
-	token, err = createOneTimeToken(o)
-	if err != nil {
-		return nil, err
-	}
-	log.Println("writing msg", string(msg), "with token", string(token))
-	err = writeMsgToVault(token, msg)
-	if err != nil {
-		return nil, err
-	}
-	return token, nil
+func newVaultClient() (*vault.Client, error) {
+	return vault.NewClient(vault.DefaultConfig())
+
 }
 
-func createOneTimeToken(o *OTSecretSvc) ([]byte, error) {
-
-	v, err := vault.NewClient(vault.DefaultConfig())
-	vauth := v.Auth().Token()
+func newVaultClientWithToken(token string) (*vault.Client, error) {
+	c, err := newVaultClient()
 	if err != nil {
-		return nil, fmt.Errorf("could not create token service %s", err)
+		return nil, err
 	}
+	c.SetToken(token)
+	return c, nil
+}
+
+func CreateSecretMsg(msg string) (token string, err error) {
+	t, err := createOneTimeToken()
+	if err != nil {
+		return "", err
+	}
+
+	if writeMsgToVault(t, msg) != nil {
+		return "", err
+	}
+	return t, nil
+}
+
+func createOneTimeToken() (string, error) {
+	c, err := newVaultClient()
+	if err != nil {
+		return "", err
+	}
+	t := c.Auth().Token()
+
 	var notRenewable bool
-	sec, err := vauth.Create(&vault.TokenCreateRequest{
+	s, err := t.Create(&vault.TokenCreateRequest{
 		Metadata:       map[string]string{"name": "placeholder"},
 		ExplicitMaxTTL: "24h",
 		NumUses:        2,
 		Renewable:      &notRenewable,
 	})
 	if err != nil {
-		fmt.Println(err)
-		return nil, err
+		return "", err
 	}
-	log.Println("got one time token : ", string([]byte(sec.Auth.ClientToken)))
-	return []byte(sec.Auth.ClientToken), err
+
+	return s.Auth.ClientToken, nil
 }
 
-func writeMsgToVault(token, msg []byte) error {
-	// We have to use a new client with the new one time token
-	config := vault.DefaultConfig()
-	otc, err := vault.NewClient(config)
-	otc.SetToken(string(token))
+func writeMsgToVault(token, msg string) error {
+	c, err := newVaultClientWithToken(token)
 	if err != nil {
 		return err
 	}
 
-	raw := map[string]interface{}{"msg": string(msg)}
+	raw := map[string]interface{}{"msg": msg}
 
-	log.Printf("writing message to vault at /cubbyhole/%s", string(token))
-	otc.Logical().Write("/cubbyhole/"+string(token), raw)
+	_, err = c.Logical().Write("/cubbyhole/"+token, raw)
 
-	return nil
+	return err
 }
 
-func GetSecretMsg(token []byte) (msg []byte, err error) {
-	msg, err = getMessageFromVault(token)
+func GetSecretMsg(token string) (msg string, err error) {
+	c, err := newVaultClientWithToken(token)
 	if err != nil {
-		return nil, fmt.Errorf("could not get secret message from vault %s", err)
+		return "", err
 	}
-	return msg, nil
-}
 
-func getMessageFromVault(token []byte) (msg []byte, err error) {
-	log.Println("getting msg with token :  ", string(token))
-	otc, err := vault.NewClient(vault.DefaultConfig())
-	otc.SetToken(string(token))
+	r, err := c.Logical().Read("cubbyhole/" + token)
 	if err != nil {
-		return nil, fmt.Errorf("could not set token to get message from vault %s", err)
+		return "", err
 	}
-	res, err := otc.Logical().Read("cubbyhole/" + string(token))
-	if err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-	return []byte(res.Data["msg"].(string)), nil
+	return r.Data["msg"].(string), nil
 }
