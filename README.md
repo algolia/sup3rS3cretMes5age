@@ -6,33 +6,21 @@ A simple, secure self-destructing message service, using HashiCorp Vault product
 
 Read more about the reasoning behind this project in the [relevant](https://blog.algolia.com/secure-tool-for-one-time-self-destructing-messages/) blog post.
 
-### Run locally 
+### Run locally
 
 #### Prerequisites
 
 * [Go](https://golang.org/doc/install)
 * [Docker](https://docs.docker.com/engine/installation/)
+* [Docker-Compose](https://docs.docker.com/compose/install/)
+* Make
 
-#### Installing
+#### Installing / Running
 
-* run hashicorp vault server 
+* run `docker-compose.yml` orchestration locally
 
     ```shell
-    docker run -ti --cap-add=IPC_LOCK -ti -p 8200:8200   --name vault vault
-    ```
-
-* set vault environment variable 
-
-    ```shell 
-    export VAULT_ADDR=http://localhost:8200
-    export VAULT_TOKEN=$(docker logs vault | grep Token | awk '{print $NF}')
-    ```
-
-* run the secretMsg service
-    ```shell
-    git clone https://github.com/algolia/sup3rS3cretMes5age.git
-    go get
-    go run *.go
+    make run
     ```
 
 * try it!
@@ -40,8 +28,8 @@ Read more about the reasoning behind this project in the [relevant](https://blog
     ```shell
     http://localhost:1234/msg
     ```
-    
-    
+
+
 ### Security notice!
 
 You should always run this behind SSL/TLS; otherwise, a message will be sent unencrypted!
