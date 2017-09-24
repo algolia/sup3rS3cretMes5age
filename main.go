@@ -6,6 +6,7 @@ import (
 )
 
 func main() {
+	handlers := NewSecretHandlers(Vault{})
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.BodyLimit("50M"))
@@ -14,8 +15,8 @@ func main() {
 	e.File("/robots.txt", "static/robots.txt")
 
 	e.Any("/health", HealthHandler)
-	e.GET("/secret", GetMsgHandler)
-	e.POST("/secret", CreateMsgHandler)
+	e.GET("/secret", handlers.GetMsgHandler)
+	e.POST("/secret", handlers.CreateMsgHandler)
 	e.File("/msg", "static/index.html")
 	e.File("/getmsg", "static/getmsg.html")
 	e.Static("/static", "static")

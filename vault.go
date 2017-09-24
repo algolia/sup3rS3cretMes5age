@@ -4,21 +4,14 @@ import (
 	vault "github.com/hashicorp/vault/api"
 )
 
-func newVaultClient() (*vault.Client, error) {
-	return vault.NewClient(vault.DefaultConfig())
-
+type SecretMsgStorer interface {
+	Store(string) (token string, err error)
+	Get(token string) (msg string, err error)
 }
 
-func newVaultClientWithToken(token string) (*vault.Client, error) {
-	c, err := newVaultClient()
-	if err != nil {
-		return nil, err
-	}
-	c.SetToken(token)
-	return c, nil
-}
+type Vault struct{}
 
-func CreateSecretMsg(msg string) (token string, err error) {
+func (v Vault) Store(msg string) (token string, err error) {
 	t, err := createOneTimeToken()
 	if err != nil {
 		return "", err
@@ -51,6 +44,11 @@ func createOneTimeToken() (string, error) {
 	return s.Auth.ClientToken, nil
 }
 
+func newVaultClient() (*vault.Client, error) {
+	return vault.NewClient(vault.DefaultConfig())
+
+}
+
 func writeMsgToVault(token, msg string) error {
 	c, err := newVaultClientWithToken(token)
 	if err != nil {
@@ -64,7 +62,7 @@ func writeMsgToVault(token, msg string) error {
 	return err
 }
 
-func GetSecretMsg(token string) (msg string, err error) {
+func (v Vault) Get(token string) (msg string, err error) {
 	c, err := newVaultClientWithToken(token)
 	if err != nil {
 		return "", err
@@ -75,4 +73,13 @@ func GetSecretMsg(token string) (msg string, err error) {
 		return "", err
 	}
 	return r.Data["msg"].(string), nil
+}
+
+func newVaultClientWithToken(token string) (*vault.Client, error) {
+	c, err := newVaultClient()
+	if err != nil {
+		return nil, err
+	}
+	c.SetToken(token)
+	return c, nil
 }

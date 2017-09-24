@@ -18,7 +18,15 @@ type MsgResponse struct {
 	Msg string `json:"msg"`
 }
 
-func CreateMsgHandler(ctx echo.Context) error {
+type SecretHandlers struct {
+	store SecretMsgStorer
+}
+
+func NewSecretHandlers(s SecretMsgStorer) *SecretHandlers {
+	return &SecretHandlers{s}
+}
+
+func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 	var tr TokenResponse
 
 	// Upload file if any
@@ -39,7 +47,7 @@ func CreateMsgHandler(ctx echo.Context) error {
 			tr.FileName = file.Filename
 			encodedFile := base64.StdEncoding.EncodeToString(b)
 
-			filetoken, err := CreateSecretMsg(encodedFile)
+			filetoken, err := s.store.Store(encodedFile)
 			if err != nil {
 				return echo.NewHTTPError(http.StatusInternalServerError, err)
 			}
@@ -49,7 +57,7 @@ func CreateMsgHandler(ctx echo.Context) error {
 
 	// Handle the secret message
 	msg := ctx.FormValue("msg")
-	tr.Token, err = CreateSecretMsg(msg)
+	tr.Token, err = s.store.Store(msg)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
@@ -57,8 +65,8 @@ func CreateMsgHandler(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, tr)
 }
 
-func GetMsgHandler(ctx echo.Context) error {
-	m, err := GetSecretMsg(ctx.QueryParam("token"))
+func (s SecretHandlers) GetMsgHandler(ctx echo.Context) error {
+	m, err := s.store.Get(ctx.QueryParam("token"))
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
