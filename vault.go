@@ -1,7 +1,7 @@
 package main
 
 import (
-	vault "github.com/hashicorp/vault/api"
+	"github.com/hashicorp/vault/api"
 )
 
 type SecretMsgStorer interface {
@@ -9,29 +9,36 @@ type SecretMsgStorer interface {
 	Get(token string) (msg string, err error)
 }
 
-type Vault struct{}
+type vault struct {
+	address string
+	token   string
+}
 
-func (v Vault) Store(msg string) (token string, err error) {
-	t, err := createOneTimeToken()
+func NewVault(address string, token string) vault {
+	return vault{address, token}
+}
+
+func (v vault) Store(msg string) (token string, err error) {
+	t, err := v.createOneTimeToken()
 	if err != nil {
 		return "", err
 	}
 
-	if writeMsgToVault(t, msg) != nil {
+	if v.writeMsgToVault(t, msg) != nil {
 		return "", err
 	}
 	return t, nil
 }
 
-func createOneTimeToken() (string, error) {
-	c, err := newVaultClient()
+func (v vault) createOneTimeToken() (string, error) {
+	c, err := v.newVaultClient()
 	if err != nil {
 		return "", err
 	}
 	t := c.Auth().Token()
 
 	var notRenewable bool
-	s, err := t.Create(&vault.TokenCreateRequest{
+	s, err := t.Create(&api.TokenCreateRequest{
 		Metadata:       map[string]string{"name": "placeholder"},
 		ExplicitMaxTTL: "24h",
 		NumUses:        2,
@@ -44,13 +51,28 @@ func createOneTimeToken() (string, error) {
 	return s.Auth.ClientToken, nil
 }
 
-func newVaultClient() (*vault.Client, error) {
-	return vault.NewClient(vault.DefaultConfig())
+func (v vault) newVaultClient() (*api.Client, error) {
+	c, err := api.NewClient(api.DefaultConfig())
+	if err != nil {
+		return nil, err
+	}
 
+	c.SetToken(v.token)
+
+	if v.address == "" {
+		return c, nil
+	}
+
+	err = c.SetAddress(v.address)
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
 }
 
-func writeMsgToVault(token, msg string) error {
-	c, err := newVaultClientWithToken(token)
+func (v vault) writeMsgToVault(token, msg string) error {
+	c, err := v.newVaultClientWithToken(token)
 	if err != nil {
 		return err
 	}
@@ -62,8 +84,8 @@ func writeMsgToVault(token, msg string) error {
 	return err
 }
 
-func (v Vault) Get(token string) (msg string, err error) {
-	c, err := newVaultClientWithToken(token)
+func (v vault) Get(token string) (msg string, err error) {
+	c, err := v.newVaultClientWithToken(token)
 	if err != nil {
 		return "", err
 	}
@@ -75,8 +97,8 @@ func (v Vault) Get(token string) (msg string, err error) {
 	return r.Data["msg"].(string), nil
 }
 
-func newVaultClientWithToken(token string) (*vault.Client, error) {
-	c, err := newVaultClient()
+func (v vault) newVaultClientWithToken(token string) (*api.Client, error) {
+	c, err := v.newVaultClient()
 	if err != nil {
 		return nil, err
 	}
