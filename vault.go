@@ -57,7 +57,9 @@ func (v vault) newVaultClient() (*api.Client, error) {
 		return nil, err
 	}
 
-	c.SetToken(v.token)
+	if v.token != "" {
+		c.SetToken(v.token)
+	}
 
 	if v.address == "" {
 		return c, nil
