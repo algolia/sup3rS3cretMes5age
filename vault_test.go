@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestVaultStore(t *testing.T) {
+func TestStoreAndGet(t *testing.T) {
 	v := NewVault(c.Address(), c.Token())
 	secret := "my secret"
 	token, err := v.Store(secret)
@@ -68,5 +68,24 @@ func TestVaultStore(t *testing.T) {
 
 	if msg != secret {
 		t.Fatalf("expected message %s, got: %s", secret, msg)
+	}
+}
+
+func TestMsgCanOnlyBeAccessedOnce(t *testing.T) {
+	v := NewVault(c.Address(), c.Token())
+	secret := "my secret"
+	token, err := v.Store(secret)
+	if err != nil {
+		t.Fatalf("no error expected, got %v", err)
+	}
+
+	_, err = v.Get(token)
+	if err != nil {
+		t.Fatalf("no error expected, got %v", err)
+	}
+
+	_, err = v.Get(token)
+	if err == nil {
+		t.Fatal("error expected, got nil")
 	}
 }
