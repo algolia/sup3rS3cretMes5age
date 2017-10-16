@@ -1,4 +1,4 @@
-# sup3rS3cretMes5age!
+# sup3rS3cretMes5age! [![Build Status](https://travis-ci.org/algolia/sup3rS3cretMes5age.svg)](https://travis-ci.org/algolia/sup3rS3cretMes5age)
 
 A simple, secure self-destructing message service, using HashiCorp Vault product as a backend.
 
