@@ -2,10 +2,8 @@ package main
 
 import (
 	"encoding/base64"
-	"log"
-	"net/http"
-
 	"io/ioutil"
+	"net/http"
 
 	"github.com/labstack/echo"
 )
@@ -16,11 +14,19 @@ type TokenResponse struct {
 	FileName  string `json:"filename,omitempty"`
 }
 
-type MsgReposne struct {
+type MsgResponse struct {
 	Msg string `json:"msg"`
 }
 
-func (o *OTSecretSvc) CreateMsgHandler(ctx echo.Context) error {
+type SecretHandlers struct {
+	store SecretMsgStorer
+}
+
+func NewSecretHandlers(s SecretMsgStorer) *SecretHandlers {
+	return &SecretHandlers{s}
+}
+
+func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 	var tr TokenResponse
 
 	// Upload file if any
@@ -28,51 +34,50 @@ func (o *OTSecretSvc) CreateMsgHandler(ctx echo.Context) error {
 	if err == nil {
 		src, err := file.Open()
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "file fileopen failed"+err.Error())
+			return echo.NewHTTPError(http.StatusInternalServerError, err)
 		}
 		defer src.Close()
 
 		b, err := ioutil.ReadAll(src)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "file readall failed"+err.Error())
+			return echo.NewHTTPError(http.StatusInternalServerError, err)
 		}
 
 		if len(b) > 0 {
 			tr.FileName = file.Filename
 			encodedFile := base64.StdEncoding.EncodeToString(b)
-			filetoken, err := CreateSecretMsg(o, []byte(encodedFile))
+
+			filetoken, err := s.store.Store(encodedFile)
 			if err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, "cannot create msg "+err.Error())
+				return echo.NewHTTPError(http.StatusInternalServerError, err)
 			}
-			tr.FileToken = string(filetoken)
+			tr.FileToken = filetoken
 		}
 	}
 
 	// Handle the secret message
 	msg := ctx.FormValue("msg")
-	log.Println("msg received", msg)
-	token, err := CreateSecretMsg(o, []byte(msg))
+	tr.Token, err = s.store.Store(msg)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "cannot create msg "+err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
-	tr.Token = string(token)
 
 	return ctx.JSON(http.StatusOK, tr)
 }
 
-func (o *OTSecretSvc) GetMsgHandler(ctx echo.Context) error {
-	msg, err := GetSecretMsg([]byte(ctx.QueryParam("token")))
+func (s SecretHandlers) GetMsgHandler(ctx echo.Context) error {
+	m, err := s.store.Get(ctx.QueryParam("token"))
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "cannot get msg "+err.Error())
+		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
-	m := &MsgReposne{
-		Msg: string(msg),
+	r := &MsgResponse{
+		Msg: m,
 	}
-	return ctx.JSON(http.StatusOK, m)
+	return ctx.JSON(http.StatusOK, r)
 }
 
-func (o *OTSecretSvc) HealthHandler(ctx echo.Context) error {
-	return ctx.String(http.StatusOK, "OK")
+func HealthHandler(ctx echo.Context) error {
+	return ctx.String(http.StatusOK, http.StatusText(http.StatusOK))
 }
 
 func redirect(ctx echo.Context) error {
