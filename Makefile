@@ -4,6 +4,7 @@ deps:
 	@go get -u github.com/hashicorp/vault
 	@go get -u github.com/labstack/echo
 	@go get -u github.com/dgrijalva/jwt-go
+	@go get -u gopkg.in/ory-am/dockertest.v3
 
 bin/sup3rs3cretMes5age: deps
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o $@
