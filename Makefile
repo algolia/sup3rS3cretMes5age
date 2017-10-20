@@ -23,7 +23,7 @@ nginx/certs/default.crt: nginx/certs
 	-days 365 \
 	-keyout nginx/certs/default.key \
 	-nodes \
-	-subj "/C=US/ST=Oregon/L=Portland/O=Company Name/OU=Org/CN=localhost" \
+	-subj "/C=US/ST=Oregon/L=Portland/O=Localhost LLC/OU=Org/CN=localhost" \
 	-out $@
 
 .PHONY: build
@@ -40,12 +40,16 @@ clean:
 	@rm -f bin/*
 	@docker-compose rm -fv
 
-run-local: clean build nginx.tmpl nginx/certs/default.crt
-	@docker-compose up --build -d
+run-local: clean build nginx/certs/default.crt
+	@NGINX_CONF_PATH=$(PWD)/nginx \
+	STATIC_FILES_PATH=$(PWD)/static \
+	docker-compose up --build -d
 
 .PHONY: run
-run: clean build nginx.tmpl
-	@docker-compose up --build -d
+run: clean build
+	@NGINX_CONF_PATH=$(PWD)/nginx \
+	STATIC_FILES_PATH=$(PWD)/static \
+	docker-compose up --build -d
 
 .PHONY: stop
 stop:

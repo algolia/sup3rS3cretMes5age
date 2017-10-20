@@ -22,7 +22,6 @@ services:
       VIRTUAL_HOST: "${VIRTUAL_HOST}"
       VIRTUAL_PROTO: "http"
       VIRTUAL_PORT: 1234
-      CERT_NAME: "default"
     expose:
       - 1234
 
@@ -57,7 +56,7 @@ services:
       - ${STATIC_FILES_PATH}:/usr/share/nginx/html
       - ${NGINX_CONF_PATH}/certs:/etc/nginx/certs:ro
       - /var/run/docker.sock:/tmp/docker.sock:ro
-      - ./nginx.tmpl:/etc/docker-gen/templates/nginx.tmpl:ro
+      - ./nginx/nginx.tmpl:/etc/docker-gen/templates/nginx.tmpl:ro
 
   nginx-letsencrypt:
     image: jrcs/letsencrypt-nginx-proxy-companion
