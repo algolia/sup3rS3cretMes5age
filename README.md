@@ -6,34 +6,43 @@ A simple, secure self-destructing message service, using HashiCorp Vault product
 
 Read more about the reasoning behind this project in the [relevant](https://blog.algolia.com/secure-tool-for-one-time-self-destructing-messages/) blog post.
 
-### Run locally
+Now using Let's Encrypt for simple and free SSL certs!
 
 #### Prerequisites
 
-* [Go](https://golang.org/doc/install)
+* [Go](https://golang.org/doc/install) (for development)
 * [Docker](https://docs.docker.com/engine/installation/)
 * [Docker-Compose](https://docs.docker.com/compose/install/)
 * Make
 
-#### Installing / Running
+#### Running Locally
 
-* run `docker-compose.yml` orchestration locally
+Running locally will use a self-signed SSL certificate for whatever your local dev domain is. The default is `localhost`, to change it just pass an argument to `make`. For example, if you set `127.0.0.1 secret.dev` in your `/etc/hosts` you would run locally as:
+
+```shell
+    $ make run-local VIRTUAL_HOST=secret.dev
+```
+
+* try it! (you can ignore the safety warning since it's a self-signed cert)
 
     ```shell
-    make run
+    https://secret.dev
     ```
 
-* try it!
+#### Running with Let's Encrypt
 
-    ```shell
-    http://localhost:1234/msg
-    ```
+Using [lets-encrypt-nginx-proxy-companion](https://github.com/JrCs/docker-letsencrypt-nginx-proxy-companion) you can now get a free (and valid) SSL cert when running this project on a live server. Thanks to [evertramos](https://github.com/evertramos/)'s [docker-compose-letsencrypt-nginx-proxy-companion](https://github.com/evertramos/docker-compose-letsencrypt-nginx-proxy-companion) for a great working example.
+
+    1. Clone this repo
+    2. Ensure you have `docker` and `docker-compose` installed on server
+    3. run `make run VIRTUAL_HOST=<YOUR_DOMAIN_HERE>
+    4. Let's Encrypt may take a few minutes to validate your domain
+    5. open `https://your-domain`
 
 
 ### Security notice!
 
 You should always run this behind SSL/TLS; otherwise, a message will be sent unencrypted!
-
 
 ### Screenshot
 

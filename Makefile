@@ -1,7 +1,13 @@
 GOLANG_VERSION := 1.9
+
 PROJECT_OWNER := algolia
 PROJECT_PATH := src/github.com/$(PROJECT_OWNER)/sup3rs3cretMes5age
+
+# For MacOS use darwin
 TARGET_OS ?= linux
+
+# When developing locally, change this to whatever fqdn you are using for 127.0.0.1
+VIRTUAL_HOST ?= localhost
 
 $(GOPATH)/bin/govendor:
 	@go get -u github.com/kardianos/govendor
@@ -23,7 +29,7 @@ nginx/certs/default.crt: nginx/certs
 	-days 365 \
 	-keyout nginx/certs/default.key \
 	-nodes \
-	-subj "/C=US/ST=Oregon/L=Portland/O=Localhost LLC/OU=Org/CN=localhost" \
+	-subj "/C=US/ST=Oregon/L=Portland/O=Localhost LLC/OU=Org/CN=$(VIRTUAL_HOST)" \
 	-out $@
 
 .PHONY: build
@@ -40,9 +46,12 @@ clean:
 	@rm -f bin/*
 	@docker-compose rm -fv
 
+.PHONY: run-local
 run-local: clean build nginx/certs/default.crt
 	@NGINX_CONF_PATH=$(PWD)/nginx \
 	STATIC_FILES_PATH=$(PWD)/static \
+	VIRTUAL_HOST=$(VIRTUAL_HOST) \
+	CERT_NAME=default \
 	docker-compose up --build -d
 
 .PHONY: run
@@ -50,6 +59,10 @@ run: clean build
 	@NGINX_CONF_PATH=$(PWD)/nginx \
 	STATIC_FILES_PATH=$(PWD)/static \
 	docker-compose up --build -d
+
+.PHONY: logs
+logs:
+	@docker-compose logs -f
 
 .PHONY: stop
 stop:

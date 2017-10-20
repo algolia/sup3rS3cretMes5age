@@ -4,6 +4,7 @@ services:
 
   vault:
     image: vault:latest
+    container_name: vault
     environment:
       VAULT_DEV_ROOT_TOKEN_ID: supersecret
     cap_add:
@@ -14,6 +15,7 @@ services:
   supersecret:
     build: ./
     image: algolia/supersecretmessage:latest
+    container_name: supersecret
     environment:
       VAULT_ADDR: http://vault:8200
       VAULT_TOKEN: supersecret
@@ -22,6 +24,7 @@ services:
       VIRTUAL_HOST: "${VIRTUAL_HOST}"
       VIRTUAL_PROTO: "http"
       VIRTUAL_PORT: 1234
+      CERT_NAME: "${CERT_NAME}"
     expose:
       - 1234
 
@@ -71,5 +74,3 @@ services:
     environment:
       NGINX_DOCKER_GEN_CONTAINER: "nginx-gen"
       NGINX_PROXY_CONTAINER: "nginx"
-
-
