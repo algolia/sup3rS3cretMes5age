@@ -19,11 +19,11 @@ Now using Let's Encrypt for simple and free SSL certs!
 
 Running locally will use a self-signed SSL certificate for whatever your local dev domain is. The default is `localhost`, to change it just pass an argument to `make`. For example, if you set `127.0.0.1 secret.dev` in your `/etc/hosts` you would run locally as:
 
-```shell
-    $ make run-local VIRTUAL_HOST=secret.dev
-```
+    ```shell
+        $ make run-local VIRTUAL_HOST=secret.dev
+    ```
 
-* try it! (you can ignore the safety warning since it's a self-signed cert)
+Try it! (you can ignore the safety warning since it's a self-signed cert)
 
     ```shell
     https://secret.dev
