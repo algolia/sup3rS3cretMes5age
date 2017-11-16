@@ -13,3 +13,7 @@ go:
 matrix:
   allow_failures:
     - go: tip
+
+script:
+  - make vendor
+  - make test
