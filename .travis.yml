@@ -15,5 +15,5 @@ matrix:
     - go: tip
 
 script:
-  - make deps
-  - go test -v ./...
+  - make vendor
+  - make test

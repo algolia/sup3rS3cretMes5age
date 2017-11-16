@@ -32,6 +32,10 @@ nginx/certs/default.crt: nginx/certs
 	-subj "/C=US/ST=Oregon/L=Portland/O=Localhost LLC/OU=Org/CN=$(VIRTUAL_HOST)" \
 	-out $@
 
+.PHONY: test
+test: $(GOPATH)/bin/govendor
+	@govendor test -v +local
+
 .PHONY: build
 build:
 	@docker run \
