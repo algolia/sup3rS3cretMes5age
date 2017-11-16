@@ -1,1 +1,4 @@
 bin
+vendor/**/
+nginx/**/
+static/.well-known
