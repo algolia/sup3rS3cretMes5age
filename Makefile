@@ -28,6 +28,9 @@ nginx/certs/default.crt: nginx/certs
 	-subj "/C=US/ST=Oregon/L=Portland/O=Localhost LLC/OU=Org/CN=$(VIRTUAL_HOST)" \
 	-out $@
 
+test:
+	go test ./... -v
+
 build: bin/sup3rs3cretMes5age
 
 clean:
@@ -52,4 +55,4 @@ logs:
 stop:
 	@docker-compose stop
 
-.PHONY: deps build clean run-local run logs stop
+.PHONY: deps test build clean run-local run logs stop
