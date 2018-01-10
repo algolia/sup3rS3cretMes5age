@@ -1,8 +1,3 @@
-GOLANG_VERSION := 1.9
-
-PROJECT_OWNER := algolia
-PROJECT_PATH := src/github.com/$(PROJECT_OWNER)/sup3rs3cretMes5age
-
 # For MacOS use darwin
 TARGET_OS ?= linux
 
