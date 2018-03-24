@@ -1,22 +1,13 @@
-GOLANG_VERSION := 1.9
-
-PROJECT_OWNER := algolia
-PROJECT_PATH := src/github.com/$(PROJECT_OWNER)/sup3rs3cretMes5age
-
 # For MacOS use darwin
 TARGET_OS ?= linux
 
 # When developing locally, change this to whatever fqdn you are using for 127.0.0.1
 VIRTUAL_HOST ?= localhost
 
-$(GOPATH)/bin/govendor:
-	@go get -u github.com/kardianos/govendor
+deps:
+	dep ensure -v
 
-.PHONY: vendor
-vendor: $(GOPATH)/bin/govendor
-	@govendor sync
-
-bin/sup3rs3cretMes5age: vendor
+bin/sup3rs3cretMes5age: deps
 	@CGO_ENABLED=0 GOOS=$(TARGET_OS) GOARCH=amd64 go build -o $@
 
 nginx/certs:
@@ -32,21 +23,15 @@ nginx/certs/default.crt: nginx/certs
 	-subj "/C=US/ST=Oregon/L=Portland/O=Localhost LLC/OU=Org/CN=$(VIRTUAL_HOST)" \
 	-out $@
 
-.PHONY: build
-build:
-	@docker run \
-	--rm \
-	-v $(PWD):/go/$(PROJECT_PATH) \
-	-w /go/$(PROJECT_PATH) \
-	golang:$(GOLANG_VERSION) \
-	make bin/sup3rs3cretMes5age
+test:
+	go test ./... -v
 
-.PHONY: clean
+build: bin/sup3rs3cretMes5age
+
 clean:
 	@rm -f bin/*
 	@docker-compose rm -fv
 
-.PHONY: run-local
 run-local: clean build nginx/certs/default.crt
 	@NGINX_CONF_PATH=$(PWD)/nginx \
 	STATIC_FILES_PATH=$(PWD)/static \
@@ -54,16 +39,15 @@ run-local: clean build nginx/certs/default.crt
 	CERT_NAME=default \
 	docker-compose up --build -d
 
-.PHONY: run
 run: clean build
 	@NGINX_CONF_PATH=$(PWD)/nginx \
 	STATIC_FILES_PATH=$(PWD)/static \
 	docker-compose up --build -d
 
-.PHONY: logs
 logs:
 	@docker-compose logs -f
 
-.PHONY: stop
 stop:
 	@docker-compose stop
+
+.PHONY: deps test build clean run-local run logs stop

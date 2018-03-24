@@ -68,13 +68,12 @@
             fetch(window.location.origin + "/secret?token=" + token, {
                 method: 'get'
             }).then(function (response) {
-                var secretfile
                 response.json().then(function (json) {
                     //decodedMsg = window.atob(json.msg)//console.log("response=", json.msg);
                     saveData(json.msg, name);
                 });
-                
-                
+
+
 
             }).catch(function (err) {
                 console.error(err);
@@ -89,14 +88,14 @@
                 console.log( "data=", data);
                 console.log( "fileName=", fileName);
                 //var blob = new Blob([json], { type: "octet/stream" }),
-                var blob = b64toBlob([data],  { type: "octet/stream" }) 
+                var blob = b64toBlob([data],  { type: "octet/stream" })
                     url = window.URL.createObjectURL(blob);
                 a.href = url;
                 a.download = fileName;
                 a.click();
                 window.URL.revokeObjectURL(url);
             };
-        }());  
+        }());
 
         function b64toBlob(b64Data, contentType, sliceSize) {
                 sliceSize = sliceSize || 512;
@@ -117,8 +116,7 @@
                     byteArrays.push(byteArray);
                 }
 
-                var blob = new Blob(byteArrays, {type: contentType});
-                return blob;
+                return new Blob(byteArrays, {type: contentType});
             }
 
     </script>

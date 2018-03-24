@@ -91,11 +91,11 @@ $("#secretform").submit(function(e) {
 function showURL(token, filetoken, filename) {
   if (filetoken) {
     $("#url").text(
-      `${window.location.origin}/getmsg?token=${token}&filetoken=${filetoken}&filename=${filename}`
+      `${window.location.origin}/getmsg?token=${encodeURIComponent(token)}&filetoken=${encodeURIComponent(filetoken)}&filename=${encodeURIComponent(filename)}`
     );
     return;
   }
-  $("#url").text(`${window.location.origin}/getmsg?token=${token}`);
+  $("#url").text(`${window.location.origin}/getmsg?token=${encodeURIComponent(token)}`);
 }
 </script>
 
