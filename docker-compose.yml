@@ -27,6 +27,8 @@ services:
       CERT_NAME: "${CERT_NAME}"
     expose:
       - 1234
+    depends_on:
+      - vault
 
   nginx:
     image: nginx
