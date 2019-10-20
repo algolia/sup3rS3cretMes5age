@@ -42,6 +42,10 @@ run-local: clean build nginx/certs/default.crt
 run: clean build
 	@NGINX_CONF_PATH=$(PWD)/nginx \
 	STATIC_FILES_PATH=$(PWD)/static \
+	VIRTUAL_HOST=$(VIRTUAL_HOST) \
+        LETSENCRYPT_HOST=$(VIRTUAL_HOST) \
+        LETSENCRYPT_EMAIL=webmaster@$(VIRTUAL_HOST) \
+        CERT_NAME=$(VIRTUAL_HOST) \
 	docker-compose up --build -d
 
 logs:
