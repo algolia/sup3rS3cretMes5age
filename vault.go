@@ -40,7 +40,7 @@ func (v vault) createOneTimeToken() (string, error) {
 	var notRenewable bool
 	s, err := t.Create(&api.TokenCreateRequest{
 		Metadata:       map[string]string{"name": "placeholder"},
-		ExplicitMaxTTL: "24h",
+		ExplicitMaxTTL: "48h",
 		NumUses:        2,
 		Renewable:      &notRenewable,
 	})
