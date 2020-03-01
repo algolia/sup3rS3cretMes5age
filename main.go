@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	handlers := NewSecretHandlers(NewVault("", ""))
+	handlers := NewSecretHandlers(newVault("", ""))
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.BodyLimit("50M"))
