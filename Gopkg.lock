@@ -156,7 +156,7 @@
     "helper/parseutil"
   ]
   revision = "87b6919dea55da61d7cd444b2442cabb8ede8ab1"
-  version = "v0.9.1"
+  version = "v1.3.2"
 
 [[projects]]
   name = "github.com/labstack/echo"

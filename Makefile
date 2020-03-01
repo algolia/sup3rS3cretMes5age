@@ -5,7 +5,7 @@ TARGET_OS ?= linux
 VIRTUAL_HOST ?= localhost
 
 deps:
-	dep ensure -v
+	go get 
 
 bin/sup3rs3cretMes5age: deps
 	@CGO_ENABLED=0 GOOS=$(TARGET_OS) GOARCH=amd64 go build -o $@

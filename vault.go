@@ -5,7 +5,7 @@ import (
 )
 
 type SecretMsgStorer interface {
-	Store(string) (token string, err error)
+	Store(string, ttl string) (token string, err error)
 	Get(token string) (msg string, err error)
 }
 
@@ -14,12 +14,16 @@ type vault struct {
 	token   string
 }
 
+// NewVault creates a vault client to talk with underline vault server
 func NewVault(address string, token string) vault {
 	return vault{address, token}
 }
 
-func (v vault) Store(msg string) (token string, err error) {
-	t, err := v.createOneTimeToken()
+func (v vault) Store(msg string, ttl string) (token string, err error) {
+	if ttl == "" {
+		ttl = "48h"
+	}
+	t, err := v.createOneTimeToken(ttl)
 	if err != nil {
 		return "", err
 	}
@@ -30,7 +34,7 @@ func (v vault) Store(msg string) (token string, err error) {
 	return t, nil
 }
 
-func (v vault) createOneTimeToken() (string, error) {
+func (v vault) createOneTimeToken(ttl string) (string, error) {
 	c, err := v.newVaultClient()
 	if err != nil {
 		return "", err

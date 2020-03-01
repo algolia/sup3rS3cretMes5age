@@ -47,7 +47,7 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 			tr.FileName = file.Filename
 			encodedFile := base64.StdEncoding.EncodeToString(b)
 
-			filetoken, err := s.store.Store(encodedFile)
+			filetoken, err := s.store.Store(encodedFile, "")
 			if err != nil {
 				return echo.NewHTTPError(http.StatusInternalServerError, err)
 			}
@@ -57,7 +57,7 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 
 	// Handle the secret message
 	msg := ctx.FormValue("msg")
-	tr.Token, err = s.store.Store(msg)
+	tr.Token, err = s.store.Store(msg, "")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
