@@ -10,7 +10,7 @@ html,body {
   min-width: 100vw;
   min-height: 100vh;
   font-family: 'Montserrat', sans-serif;
-  background-image: linear-gradient(to bottom left, #3e366a, #09112f);
+  background-image: linear-gradient(to bottom left, #6a4f36, #2f2c09);
   -webkit-font-smoothing: antialiased;
   display: flex;
   align-items: center;
