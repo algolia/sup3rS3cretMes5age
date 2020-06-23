@@ -1,3 +1,14 @@
+FROM golang:latest AS builder
+
+WORKDIR /go/src/github.com/algolia/sup3rS3cretMes5age
+ADD . .
+
+RUN go get -v 
+RUN CGO_ENABLED=0 GOOS=linux go build  -o sup3rS3cretMes5age .
+RUN pwd && ls -ltr
+
+
+
 FROM alpine:latest
 
 EXPOSE 1234
@@ -11,8 +22,7 @@ apk add --no-cache ca-certificates ;\
 mkdir -p /opt/supersecret/static
 
 WORKDIR /opt/supersecret
-
-COPY bin/sup3rs3cretMes5age /opt/supersecret
+COPY --from=builder /go/src/github.com/algolia/sup3rS3cretMes5age/sup3rS3cretMes5age .
 COPY static /opt/supersecret/static
 
-CMD [ "./sup3rs3cretMes5age" ]
+CMD [ "./sup3rS3cretMes5age" ]

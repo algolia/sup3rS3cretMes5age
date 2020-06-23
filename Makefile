@@ -4,11 +4,6 @@ TARGET_OS ?= linux
 # When developing locally, change this to whatever fqdn you are using for 127.0.0.1
 VIRTUAL_HOST ?= localhost
 
-deps:
-	dep ensure -v
-
-bin/sup3rs3cretMes5age: deps
-	@CGO_ENABLED=0 GOOS=$(TARGET_OS) GOARCH=amd64 go build -o $@
 
 nginx/certs:
 	@mkdir -p $@
@@ -26,20 +21,21 @@ nginx/certs/default.crt: nginx/certs
 test:
 	go test ./... -v
 
-build: bin/sup3rs3cretMes5age
+build: 
+	@docker-compose build
 
 clean:
 	@rm -f bin/*
 	@docker-compose rm -fv
 
-run-local: clean build nginx/certs/default.crt
+run-local: clean nginx/certs/default.crt
 	@NGINX_CONF_PATH=$(PWD)/nginx \
 	STATIC_FILES_PATH=$(PWD)/static \
 	VIRTUAL_HOST=$(VIRTUAL_HOST) \
 	CERT_NAME=default \
 	docker-compose up --build -d
 
-run: clean build
+run: clean 
 	@NGINX_CONF_PATH=$(PWD)/nginx \
 	STATIC_FILES_PATH=$(PWD)/static \
 	VIRTUAL_HOST=$(VIRTUAL_HOST) \
@@ -54,4 +50,4 @@ logs:
 stop:
 	@docker-compose stop
 
-.PHONY: deps test build clean run-local run logs stop
+.PHONY: test build clean run-local run logs stop
