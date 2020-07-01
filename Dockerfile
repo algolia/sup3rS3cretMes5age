@@ -5,9 +5,8 @@ ADD . .
 
 RUN go get -v 
 RUN CGO_ENABLED=0 GOOS=linux go build  -o sup3rS3cretMes5age .
-RUN pwd && ls -ltr
 
-
+RUN go run /usr/local/go/src/crypto/tls/generate_cert.go --host localhost
 
 FROM alpine:latest
 
@@ -22,6 +21,7 @@ apk add --no-cache ca-certificates ;\
 mkdir -p /opt/supersecret/static
 
 WORKDIR /opt/supersecret
+COPY --from=builder /go/src/github.com/algolia/sup3rS3cretMes5age/*.pem ./
 COPY --from=builder /go/src/github.com/algolia/sup3rS3cretMes5age/sup3rS3cretMes5age .
 COPY static /opt/supersecret/static
 
