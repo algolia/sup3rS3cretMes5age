@@ -10,36 +10,33 @@ Now using Let's Encrypt for simple and free SSL certs!
 
 #### Prerequisites
 
-* [Go](https://golang.org/doc/install) (for development)
+* [Go](https://golang.org/doc/install) (just for development)
 * [Docker](https://docs.docker.com/engine/installation/)
 * [Docker-Compose](https://docs.docker.com/compose/install/)
 * Make
 
 #### Running Locally
 
-Running locally will use a self-signed SSL certificate for whatever your local dev domain is. The default is `localhost`, to change it just pass an argument to `make`. For example, if you set `127.0.0.1 secret.test` in your `/etc/hosts` you would run locally as:
+Running locally will use a self-signed SSL certificate for `localhost` only. 
 
 ```shell
-$ export VIRTUAL_HOST=secret.test
-$ make run-local 
+$ make run-local
 ```
 
 Try it! (you can ignore the safety warning since it's a self-signed cert)
 
 ```shell
-https://secret.test
+https://localhost
 ```
 
 #### Running with Let's Encrypt
 
-Using [lets-encrypt-nginx-proxy-companion](https://github.com/JrCs/docker-letsencrypt-nginx-proxy-companion) you can now get a free (and valid) SSL cert when running this project on a live server. Thanks to [evertramos](https://github.com/evertramos/)'s [docker-compose-letsencrypt-nginx-proxy-companion](https://github.com/evertramos/docker-compose-letsencrypt-nginx-proxy-companion) for a great working example.
 
 1. Clone this repo
-1. Ensure you have `docker` and `docker-compose` installed on server
-1. run `VIRTUAL_HOST=<YOUR_DOMAIN_HERE>
-1. run `make run` 
-1. Let's Encrypt may take a few minutes to validate your domain
-1. open `https://your-domain`
+2. Ensure you have `docker` and `docker-compose` installed on server
+3. run `DOMAIN=secret.example.com make run`
+4. Let's Encrypt may take a few minutes to validate your domain
+5. open `https://secret.example.com`
 
 
 ### Security notice!
