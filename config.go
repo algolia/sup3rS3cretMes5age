@@ -13,7 +13,7 @@ type conf struct {
 func getConfig() conf {
 	var local bool
 	domainName := os.Getenv("DOMAIN")
-	if domainName == "" {
+	if domainName == "" || domainName == "localhost" {
 		domainName = "localhost"
 		local = true
 	}
