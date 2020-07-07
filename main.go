@@ -34,6 +34,10 @@ func main() {
 	e.File("/getmsg", "static/getmsg.html")
 	e.Static("/static", "static")
 
+
+	go func(c *echo.Echo){
+		e.Logger.Fatal(e.Start(":80"))
+    }(e)	
 	if !conf.Local {
 		e.Logger.Fatal(e.StartAutoTLS(":443"))
 	} else {
