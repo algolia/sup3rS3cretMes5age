@@ -1,9 +1,10 @@
 package main
 
 import (
+
+	"testing"
 	"log"
 	"os"
-	"testing"
 
 	"github.com/hashicorp/vault/api"
 	dockertest "github.com/ory/dockertest/v3"
@@ -54,7 +55,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestStore(t *testing.T) {
-	v := newVault(c.Address(), c.Token())
+	v := newVault(c.Address(), "test/", c.Token())
 
 	var storeParams = []struct {
 		secret string
@@ -77,7 +78,7 @@ func TestStore(t *testing.T) {
 }
 
 func TestStoreAndGet(t *testing.T) {
-	v := newVault(c.Address(), c.Token())
+	v := newVault(c.Address(), "test/", c.Token())
 	secret := "my secret"
 	token, err := v.Store(secret, "24h")
 	if err != nil {
@@ -95,9 +96,9 @@ func TestStoreAndGet(t *testing.T) {
 }
 
 func TestMsgCanOnlyBeAccessedOnce(t *testing.T) {
-	v := newVault(c.Address(), c.Token())
+	v := newVault(c.Address(), "test/", c.Token())
 	secret := "my secret"
-	token, err := v.Store(secret, "24h")
+	token, err := v.Store(secret, "")
 	if err != nil {
 		t.Fatalf("no error expected, got %v", err)
 	}
