@@ -1,9 +1,10 @@
 package main
 
 import (
+
+	"testing"
 	"log"
 	"os"
-	"testing"
 
 	"github.com/hashicorp/vault/api"
 	dockertest "gopkg.in/ory-am/dockertest.v3"
@@ -53,10 +54,36 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
+
+func TestStore(t *testing.T) {
+	v := newVault(c.Address(), c.Token())
+
+	var storeParams =  []struct {
+		secret string
+		ttl string
+	}{
+	// don't allow infinte ttl 
+	{"my secret", "0h",},
+	// don't allow more than a week ttl
+	{"my secret", "169h",},
+	}
+
+	for _, tt := range storeParams {
+		_, err := v.Store(tt.secret, tt.ttl)
+
+			if err == nil {
+				t.Fatalf("expected error, got: nil")
+			}
+	}
+
+
+
+}
+
 func TestStoreAndGet(t *testing.T) {
-	v := NewVault(c.Address(), c.Token())
+	v := newVault(c.Address(), c.Token())
 	secret := "my secret"
-	token, err := v.Store(secret)
+	token, err := v.Store(secret, "24h")
 	if err != nil {
 		t.Fatalf("no error expected, got %v", err)
 	}
@@ -72,9 +99,9 @@ func TestStoreAndGet(t *testing.T) {
 }
 
 func TestMsgCanOnlyBeAccessedOnce(t *testing.T) {
-	v := NewVault(c.Address(), c.Token())
+	v := newVault(c.Address(), c.Token())
 	secret := "my secret"
-	token, err := v.Store(secret)
+	token, err := v.Store(secret, "24h")
 	if err != nil {
 		t.Fatalf("no error expected, got %v", err)
 	}
