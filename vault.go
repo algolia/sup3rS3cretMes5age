@@ -29,9 +29,14 @@ func (v vault) Store(msg string, ttl string) (token string, err error) {
 	}
 
 	// Verify duration
-	_, err = time.ParseDuration(ttl)
+	d, err := time.ParseDuration(ttl)
 	if err != nil {
 		return "", fmt.Errorf("cannot parse duration %v", err)
+	}
+
+	// validate duration length
+	if d > 168 * time.Hour{
+		return "", fmt.Errorf("cannot set ttl to more than 7 days %v", err)
 	}
 
 	t, err := v.createOneTimeToken(ttl)
@@ -124,3 +129,4 @@ func (v vault) newVaultClientWithToken(token string) (*api.Client, error) {
 	c.SetToken(token)
 	return c, nil
 }
+
