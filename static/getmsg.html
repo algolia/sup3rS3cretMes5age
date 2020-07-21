@@ -2,17 +2,14 @@
 <html>
 
 <head>
-
-
-
     <!--Let browser know website is optimized for mobile-->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 </head>
 
 <body>
     <!--Import jQuery before materialize.js-->
-    <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/1.6.1/clipboard.min.js"></script>
+    <script type="text/javascript" src="/static/jquery-2.1.1.min.js" integrity="sha384-fj9YEHKNa/e0CNquG4NcocjoyMATYo1k2Ff5wGB42C/9AwOlJjDoySPtNJalccfI"></script>
+    <script type="text/javascript" src="/static/clipboard.min.js" integrity="sha384-cV+rhyOuRHc9Ub/91rihWcGmMmCXDeksTtCihMupQHSsi8GIIRDG0ThDc3HGQFJ3"></script>
     <link rel="stylesheet" href="/static/application.css">
     <main class="send">
         <div class="container">
@@ -69,7 +66,6 @@
                 method: 'get'
             }).then(function (response) {
                 response.json().then(function (json) {
-                    //decodedMsg = window.atob(json.msg)//console.log("response=", json.msg);
                     saveData(json.msg, name);
                 });
 
@@ -87,7 +83,6 @@
             return function (data, fileName) {
                 console.log( "data=", data);
                 console.log( "fileName=", fileName);
-                //var blob = new Blob([json], { type: "octet/stream" }),
                 var blob = b64toBlob([data],  { type: "octet/stream" })
                     url = window.URL.createObjectURL(blob);
                 a.href = url;
