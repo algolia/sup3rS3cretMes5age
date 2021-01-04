@@ -1,125 +1,162 @@
 <!DOCTYPE html>
 <html>
-
-<head>
+  <head>
     <!--Let browser know website is optimized for mobile-->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-</head>
-
-<body>
-    <!--Import jQuery before materialize.js-->
-    <script type="text/javascript" src="/static/jquery-2.1.1.min.js" integrity="sha384-fj9YEHKNa/e0CNquG4NcocjoyMATYo1k2Ff5wGB42C/9AwOlJjDoySPtNJalccfI"></script>
-    <script type="text/javascript" src="/static/clipboard.min.js" integrity="sha384-cV+rhyOuRHc9Ub/91rihWcGmMmCXDeksTtCihMupQHSsi8GIIRDG0ThDc3HGQFJ3"></script>
-    <link rel="stylesheet" href="/static/application.css">
-    <main class="send">
-        <div class="container">
-            <h1>Secret Message</h1>
-            <p class="subtitle">Get your secret one-time read only message</p>
-            <div class="input-field">
-
-
-                <textarea id="textarea1" name="msg" readonly=true class="materialize-textarea" placeholder="Message should appear here"></textarea>
-
-            </div>
-            <div class="button">
-                <button class="btn clipboard" type="submit" data-clipboard-target="#textarea1" name="action">Copy to clipboard
-              
-            </button>
-            </div>
-        </div>
-    </main>
-
-
-    <script type="text/javascript">
-        $(document).ready(function () {
-            new Clipboard('.btn');
-
-            let params = (new URL(window.location)).searchParams;
-            console.log(window.location.origin + "/secret?token=" + params.get('token') + "&filetoken=" + params.get('filetoken') + "&filename=" + params.get('filename') );
-            $.ajax({
-                type: "GET",
-                url: window.location.origin + "/secret?token=" + params.get('token'),
-                success: function (data) {
-                    console.log('Submission was successful.');
-                    console.log(data);
-                    showMsg(data.msg, params.get('filetoken'), params.get('filename'))
-                },
-                error: function (data) {
-                    console.log('An error occurred.');
-                    console.log(data);
-                    showMsg("Message was already deleted :(")
-                },
-            });
-        });
-
-        function showMsg(msg, filetoken, filename) {
-            $('#pbar').hide()
-            $('#textarea1').text(msg)
-            if (filetoken) {
-                console.log('filetoken=', filetoken)
-                getSecret(filetoken, filename)
-            }
-        }
-
-        function getSecret(token, name) {
-            fetch(window.location.origin + "/secret?token=" + token, {
-                method: 'get'
-            }).then(function (response) {
-                response.json().then(function (json) {
-                    saveData(json.msg, name);
-                });
-
-
-
-            }).catch(function (err) {
-                console.error(err);
-            });
-        }
-
-        var saveData = (function () {
-            var a = document.createElement("a");
-            document.body.appendChild(a);
-            a.style = "display: none";
-            return function (data, fileName) {
-                console.log( "data=", data);
-                console.log( "fileName=", fileName);
-                var blob = b64toBlob([data],  { type: "octet/stream" })
-                    url = window.URL.createObjectURL(blob);
-                a.href = url;
-                a.download = fileName;
-                a.click();
-                window.URL.revokeObjectURL(url);
-            };
-        }());
-
-        function b64toBlob(b64Data, contentType, sliceSize) {
-                sliceSize = sliceSize || 512;
-
-                var byteCharacters = atob(b64Data);
-                var byteArrays = [];
-
-                for (var offset = 0; offset < byteCharacters.length; offset += sliceSize) {
-                    var slice = byteCharacters.slice(offset, offset + sliceSize);
-
-                    var byteNumbers = new Array(slice.length);
-                    for (var i = 0; i < slice.length; i++) {
-                        byteNumbers[i] = slice.charCodeAt(i);
-                    }
-
-                    var byteArray = new Uint8Array(byteNumbers);
-
-                    byteArrays.push(byteArray);
-                }
-
-                return new Blob(byteArrays, {type: contentType});
-            }
-
-    </script>
     <!-- Facebook/Slack Meta Tags-->
     <meta property="og:title" content="Self Destructing Secure Message" />
-    <meta property="og:image" content="https://github.com/eranchetz/secretMsg" />
+    <meta
+      property="og:image"
+      content="https://github.com/eranchetz/secretMsg"
+    />
     <meta property="og:site_name" content="secureMsg" />
-    <meta property="og:description" content="A self destructing one time secure msg service, have fun, stay secure!" />
-</body>
+    <meta
+      property="og:description"
+      content="A self destructing one time secure msg service, have fun, stay secure!"
+    />
+  </head>
 
+  <body>
+    <script
+      type="text/javascript"
+      src="/static/clipboard.min.js"
+      integrity="sha384-cV+rhyOuRHc9Ub/91rihWcGmMmCXDeksTtCihMupQHSsi8GIIRDG0ThDc3HGQFJ3"
+    ></script>
+    <link rel="stylesheet" href="/static/application.css" />
+    <main class="send">
+      <div class="container">
+        <h1>Secret Message</h1>
+        <p class="subtitle">Get your secret one-time read only message</p>
+        <div class="input-field">
+          <textarea
+            id="textarea1"
+            name="msg"
+            readonly="true"
+            placeholder="Message should appear here"
+          ></textarea>
+        </div>
+        <div class="button">
+          <button
+            class="btn clipboard"
+            type="submit"
+            data-clipboard-target="#textarea1"
+            name="action"
+          >
+            Copy to clipboard
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <script type="text/javascript">
+      function domReady(fn) {
+        document.addEventListener('DOMContentLoaded', fn);
+        if (
+          document.readyState === 'interactive' ||
+          document.readyState === 'complete'
+        ) {
+          fn();
+        }
+      }
+
+      domReady(function () {
+        new Clipboard('.btn');
+
+        const params = new URL(window.location).searchParams;
+
+        console.log(
+          window.location.origin +
+            '/secret?token=' +
+            params.get('token') +
+            '&filetoken=' +
+            params.get('filetoken') +
+            '&filename=' +
+            params.get('filename')
+        );
+
+        fetch('/secret?token=' + params.get('token'), {
+          method: 'GET',
+        })
+          .then((res) => {
+            if (!res.ok) {
+              throw new Error(res);
+            }
+            return res;
+          })
+          .then((res) => res.json())
+          .then((data) => {
+            console.log('Submission was successful.');
+            console.log(data);
+            showMsg(data.msg, params.get('filetoken'), params.get('filename'));
+          })
+          .catch((err) => {
+            console.log('An error occurred.');
+            console.log(err);
+            showMsg('Message was already deleted :(');
+          });
+      });
+
+      function showMsg(msg, filetoken, filename) {
+        document.getElementById('textarea1').textContent = msg;
+        if (filetoken) {
+          console.log('filetoken=', filetoken);
+          getSecret(filetoken, filename);
+        }
+      }
+
+      function getSecret(token, name) {
+        fetch('/secret?token=' + token, {
+          method: 'GET',
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            saveData(data.msg, name);
+          })
+          .catch((err) => {
+            console.error(err);
+          });
+      }
+
+      function saveData(data, fileName) {
+        var a = document.createElement('a');
+        document.body.appendChild(a);
+        a.style = 'display: none';
+
+        console.log('data=', data);
+        console.log('fileName=', fileName);
+        var blob = b64toBlob([data], { type: 'octet/stream' });
+        url = window.URL.createObjectURL(blob);
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      }
+
+      function b64toBlob(b64Data, contentType, sliceSize) {
+        sliceSize = sliceSize || 512;
+
+        var byteCharacters = atob(b64Data);
+        var byteArrays = [];
+
+        for (
+          var offset = 0;
+          offset < byteCharacters.length;
+          offset += sliceSize
+        ) {
+          var slice = byteCharacters.slice(offset, offset + sliceSize);
+
+          var byteNumbers = new Array(slice.length);
+          for (var i = 0; i < slice.length; i++) {
+            byteNumbers[i] = slice.charCodeAt(i);
+          }
+
+          var byteArray = new Uint8Array(byteNumbers);
+
+          byteArrays.push(byteArray);
+        }
+
+        return new Blob(byteArrays, { type: contentType });
+      }
+    </script>
+  </body>
 </html>
