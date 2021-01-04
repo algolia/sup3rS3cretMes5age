@@ -58,58 +58,71 @@
 
   </main>
 </body>
-<script type="text/javascript" src="/static/jquery-2.1.1.min.js" integrity="sha384-fj9YEHKNa/e0CNquG4NcocjoyMATYo1k2Ff5wGB42C/9AwOlJjDoySPtNJalccfI"></script>
+
 <script type="text/javascript" src="/static/clipboard.min.js" integrity="sha384-cV+rhyOuRHc9Ub/91rihWcGmMmCXDeksTtCihMupQHSsi8GIIRDG0ThDc3HGQFJ3"></script>
 <script type="text/javascript">
-new Clipboard(".btn");
+  new Clipboard('.btn');
 
-$("#secretform").submit(function(e) {
-  e.preventDefault();
-  if (this.val === "") return false;
-  const form = new FormData($("#secretform")[0]);
+  const form = document.getElementById('secretform');
 
-  $.ajax({
-    type: "POST",
-    url: "/secret",
-    processData: false, // Important!
-    contentType: false,
-    cache: false,
-    data: form,
-    success(data) {
-      $(".success-encrypted").css({
-        opacity: 1,
-        pointerEvents: "auto",
-        visibility: "visible"
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+
+    fetch('/secret', {
+      method: 'POST',
+      body: formData,
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        applyCss(document.querySelector('.success-encrypted'), {
+          opacity: 1,
+          pointerEvents: 'auto',
+          visibility: 'visible',
+        });
+
+        applyCss(document.querySelector('.encrypt'), {
+          opacity: 0,
+          pointerEvents: 'none',
+          visibility: 'hidden',
+        });
+        applyCss(document.querySelector('.ttl'), {
+          opacity: 0,
+          pointerEvents: 'none',
+          visibility: 'hidden',
+        });
+        applyCss(document.querySelector('.input-field'), {
+          opacity: 0,
+          visibility: 'hidden',
+          pointerEvents: 'none',
+        });
+
+        showURL(data.token, data.filetoken, data.filename);
       });
-      $(".encrypt").css({
-        opacity: 0,
-        pointerEvents: "none",
-        visibility: "hidden"
-      });
-      $(".ttl").css({
-        opacity: 0,
-        pointerEvents: "none",
-        visibility: "hidden"
-      });
-      $(".input-field").css({
-        opacity: 0,
-        visibility: "hidden",
-        pointerEvents: "none"
-      });
-      showURL(data.token, data.filetoken, data.filename);
-    }
   });
-});
 
-function showURL(token, filetoken, filename) {
-  if (filetoken) {
-    $("#url").text(
-      `${window.location.origin}/getmsg?token=${encodeURIComponent(token)}&filetoken=${encodeURIComponent(filetoken)}&filename=${encodeURIComponent(filename)}`
-    );
-    return;
+  function applyCss(element, css) {
+    Object.entries(css).forEach(([key, value]) => {
+      element.style[key] = value;
+    });
   }
-  $("#url").text(`${window.location.origin}/getmsg?token=${encodeURIComponent(token)}`);
-}
+
+  function showURL(token, filetoken, filename) {
+    const url = document.getElementById('url');
+    if (filetoken) {
+      url.textContent = `${
+        window.location.origin
+      }/getmsg?token=${encodeURIComponent(token)}&filetoken=${encodeURIComponent(
+        filetoken
+      )}&filename=${encodeURIComponent(filename)}`;
+    } else {
+      url.textContent = `${
+        window.location.origin
+      }/getmsg?token=${encodeURIComponent(token)}`;
+    }
+  }
+
 </script>
 
 </html>
