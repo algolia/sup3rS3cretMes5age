@@ -1,13 +1,16 @@
-FROM golang:latest AS builder
+FROM golang:1.12 AS builder
+
+ENV GO111MODULE=on
 
 WORKDIR /go/src/github.com/algolia/sup3rS3cretMes5age
+
 ADD . .
 
-RUN go get -v 
-RUN CGO_ENABLED=0 GOOS=linux go build  -o sup3rS3cretMes5age .
+RUN go mod download
+RUN CGO_ENABLED=0 GOOS=linux go build -o sup3rS3cretMes5age .
 
 
-FROM alpine:latest
+FROM alpine:20210212
 
 ENV \
     VAULT_ADDR \
@@ -22,6 +25,7 @@ ENV \
 RUN mkdir -p /opt/supersecret/static
 
 WORKDIR /opt/supersecret
+
 COPY --from=builder /go/src/github.com/algolia/sup3rS3cretMes5age/sup3rS3cretMes5age .
 COPY static /opt/supersecret/static
 
