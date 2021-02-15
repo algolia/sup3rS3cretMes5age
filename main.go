@@ -7,19 +7,19 @@ import (
 )
 
 func main() {
+	conf := loadConfig()
 
-	conf := getConfig()
-
-	handlers := NewSecretHandlers(newVault("", ""))
+	handlers := NewSecretHandlers(newVault("", "")) // Vault address and token are taken from VAULT_ADDR and VAULT_TOKEN environment variables
 	e := echo.New()
 
-	e.Pre(middleware.HTTPSRedirect())
+	if conf.HttpsRedirectEnabled {
+		e.Pre(middleware.HTTPSRedirect())
+	}
 
-	//AutoTLS
-	e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(conf.Domain)
-
-	// Cache certificates
-	e.AutoTLSManager.Cache = autocert.DirCache("/var/www/.cache")
+	if conf.TLSAutoDomain != "" {
+		e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(conf.TLSAutoDomain)
+		e.AutoTLSManager.Cache = autocert.DirCache("/var/www/.cache")
+	}
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.BodyLimit("50M"))
@@ -34,13 +34,19 @@ func main() {
 	e.File("/getmsg", "static/getmsg.html")
 	e.Static("/static", "static")
 
+	if conf.HttpBindingAddress != "" {
+		if conf.HttpsBindingAddress != "" {
+			go func(c *echo.Echo) {
+				e.Logger.Fatal(e.Start(conf.HttpBindingAddress))
+			}(e)
+		} else {
+			e.Logger.Fatal(e.Start(conf.HttpBindingAddress))
+		}
+	}
 
-	go func(c *echo.Echo){
-		e.Logger.Fatal(e.Start(":80"))
-    }(e)	
-	if !conf.Local {
-		e.Logger.Fatal(e.StartAutoTLS(":443"))
-	} else {
-		e.Logger.Fatal(e.StartTLS(":443", "cert.pem", "key.pem"))
+	if conf.TLSAutoDomain != "" {
+		e.Logger.Fatal(e.StartAutoTLS(conf.HttpsBindingAddress))
+	} else if conf.TLSCertFilepath != "" {
+		e.Logger.Fatal(e.StartTLS(conf.HttpsBindingAddress, conf.TLSCertFilepath, conf.TLSCertKeyFilepath))
 	}
 }
