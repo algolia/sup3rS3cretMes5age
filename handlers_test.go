@@ -23,7 +23,7 @@ func (f *FakeSecretMsgStorer) Get(token string) (msg string, err error) {
 	return f.msg, f.err
 }
 
-func (f *FakeSecretMsgStorer) Store(msg string) (token string, err error) {
+func (f *FakeSecretMsgStorer) Store(msg string, ttl string) (token string, err error) {
 	f.lastMsg = msg
 	return f.token, f.err
 }
@@ -49,7 +49,7 @@ func TestGetMsgHandlerSuccess(t *testing.T) {
 		t.Fatalf("got statusCode %d, expected %d", rec.Code, http.StatusOK)
 	}
 
-	expected := `{"msg":"secret"}`
+	expected := "{\"msg\":\"secret\"}\n"
 	actual := rec.Body.String()
 	if expected != actual {
 		t.Fatalf("got body %s, expected %s", expected, actual)
