@@ -1,7 +1,6 @@
 version: '3.2'
 
 services:
-
   vault:
     image: vault:latest
     container_name: vault
@@ -19,10 +18,8 @@ services:
     environment:
       VAULT_ADDR: http://vault:8200
       VAULT_TOKEN: supersecret
-      DOMAIN: "${DOMAIN}"
+      SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS: ":8082"
     ports:
-      - "80:80"
-      - "443:443"
+      - "8082:8082"
     depends_on:
       - vault
-
