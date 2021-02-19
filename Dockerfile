@@ -22,7 +22,9 @@ ENV \
     SUPERSECRETMESSAGE_TLS_CERT_FILEPATH \
     SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH
 
-RUN mkdir -p /opt/supersecret/static
+RUN \
+    apk add --no-cache ca-certificates ;\
+    mkdir -p /opt/supersecret/static
 
 WORKDIR /opt/supersecret
 
