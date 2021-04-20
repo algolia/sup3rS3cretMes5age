@@ -1,4 +1,4 @@
-FROM golang:1.12 AS builder
+FROM golang:1.15 AS builder
 
 ENV GO111MODULE=on
 
@@ -10,7 +10,7 @@ RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux go build -o sup3rS3cretMes5age .
 
 
-FROM alpine:20210212
+FROM alpine:latest
 
 ENV \
     VAULT_ADDR \
