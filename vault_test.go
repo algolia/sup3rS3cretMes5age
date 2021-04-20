@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/vault/api"
-	dockertest "gopkg.in/ory-am/dockertest.v3"
+	dockertest "github.com/ory/dockertest/v3"
 )
 
 var c *api.Client
@@ -54,9 +54,9 @@ func TestMain(m *testing.M) {
 }
 
 func TestStoreAndGet(t *testing.T) {
-	v := NewVault(c.Address(), c.Token())
+	v := newVault(c.Address(), c.Token())
 	secret := "my secret"
-	token, err := v.Store(secret)
+	token, err := v.Store(secret, "")
 	if err != nil {
 		t.Fatalf("no error expected, got %v", err)
 	}
@@ -72,9 +72,9 @@ func TestStoreAndGet(t *testing.T) {
 }
 
 func TestMsgCanOnlyBeAccessedOnce(t *testing.T) {
-	v := NewVault(c.Address(), c.Token())
+	v := newVault(c.Address(), c.Token())
 	secret := "my secret"
-	token, err := v.Store(secret)
+	token, err := v.Store(secret, "")
 	if err != nil {
 		t.Fatalf("no error expected, got %v", err)
 	}

@@ -11,7 +11,7 @@
   <meta name="theme-color" content="#ffffff">
   <!--Let browser know website is optimized for mobile-->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link href="https://fonts.googleapis.com/css?family=Montserrat" rel="stylesheet">
+  <link href="/static/montserrat.css" rel="stylesheet">
   <link rel="stylesheet" href="/static/application.css">
 </head>
 
@@ -27,6 +27,14 @@
          Upload Secret File: <input id='file-input' type="file" name="file" size=25></br>
             
             <textarea id="textarea1" name="msg" placeholder="Paste your message here" required="required"></textarea>
+          </div>
+          <div class="ttl">
+            Time to expire: 
+            <select name="ttl" id="ttl">
+              <option value="24h">24h</option>
+              <option value="48h" selected>48h</option>
+              <option value="168h">week</option>
+            </select>
           </div>
           <div class="button_wrapper">
             <button class="encrypt" type="submit" name="action">Submit
@@ -50,53 +58,71 @@
 
   </main>
 </body>
-<script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/1.7.1/clipboard.min.js"></script>
+
+<script type="text/javascript" src="/static/clipboard.min.js" integrity="sha384-cV+rhyOuRHc9Ub/91rihWcGmMmCXDeksTtCihMupQHSsi8GIIRDG0ThDc3HGQFJ3"></script>
 <script type="text/javascript">
-new Clipboard(".btn");
+  new Clipboard('.btn');
 
-$("#secretform").submit(function(e) {
-  e.preventDefault();
-  if (this.val === "") return false;
-  const form = new FormData($("#secretform")[0]);
+  const form = document.getElementById('secretform');
 
-  $.ajax({
-    type: "POST",
-    url: "/secret",
-    processData: false, // Important!
-    contentType: false,
-    cache: false,
-    data: form,
-    success(data) {
-      $(".success-encrypted").css({
-        opacity: 1,
-        pointerEvents: "auto",
-        visibility: "visible"
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+
+    fetch('/secret', {
+      method: 'POST',
+      body: formData,
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        applyCss(document.querySelector('.success-encrypted'), {
+          opacity: 1,
+          pointerEvents: 'auto',
+          visibility: 'visible',
+        });
+
+        applyCss(document.querySelector('.encrypt'), {
+          opacity: 0,
+          pointerEvents: 'none',
+          visibility: 'hidden',
+        });
+        applyCss(document.querySelector('.ttl'), {
+          opacity: 0,
+          pointerEvents: 'none',
+          visibility: 'hidden',
+        });
+        applyCss(document.querySelector('.input-field'), {
+          opacity: 0,
+          visibility: 'hidden',
+          pointerEvents: 'none',
+        });
+
+        showURL(data.token, data.filetoken, data.filename);
       });
-      $(".encrypt").css({
-        opacity: 0,
-        pointerEvents: "none",
-        visibility: "hidden"
-      });
-      $(".input-field").css({
-        opacity: 0,
-        visibility: "hidden",
-        pointerEvents: "none"
-      });
-      showURL(data.token, data.filetoken, data.filename);
-    }
   });
-});
 
-function showURL(token, filetoken, filename) {
-  if (filetoken) {
-    $("#url").text(
-      `${window.location.origin}/getmsg?token=${encodeURIComponent(token)}&filetoken=${encodeURIComponent(filetoken)}&filename=${encodeURIComponent(filename)}`
-    );
-    return;
+  function applyCss(element, css) {
+    Object.entries(css).forEach(([key, value]) => {
+      element.style[key] = value;
+    });
   }
-  $("#url").text(`${window.location.origin}/getmsg?token=${encodeURIComponent(token)}`);
-}
+
+  function showURL(token, filetoken, filename) {
+    const url = document.getElementById('url');
+    if (filetoken) {
+      url.textContent = `${
+        window.location.origin
+      }/getmsg?token=${encodeURIComponent(token)}&filetoken=${encodeURIComponent(
+        filetoken
+      )}&filename=${encodeURIComponent(filename)}`;
+    } else {
+      url.textContent = `${
+        window.location.origin
+      }/getmsg?token=${encodeURIComponent(token)}`;
+    }
+  }
+
 </script>
 
 </html>

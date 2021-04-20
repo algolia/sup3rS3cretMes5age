@@ -1,11 +1,14 @@
 package main
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/hashicorp/vault/api"
 )
 
 type SecretMsgStorer interface {
-	Store(string) (token string, err error)
+	Store(string, ttl string) (token string, err error)
 	Get(token string) (msg string, err error)
 }
 
@@ -14,12 +17,29 @@ type vault struct {
 	token   string
 }
 
-func NewVault(address string, token string) vault {
+// NewVault creates a vault client to talk with underline vault server
+func newVault(address string, token string) vault {
 	return vault{address, token}
 }
 
-func (v vault) Store(msg string) (token string, err error) {
-	t, err := v.createOneTimeToken()
+func (v vault) Store(msg string, ttl string) (token string, err error) {
+	// Default TTL
+	if ttl == "" {
+		ttl = "48h"
+	}
+
+	// Verify duration
+	d, err := time.ParseDuration(ttl)
+	if err != nil {
+		return "", fmt.Errorf("cannot parse duration %v", err)
+	}
+
+	// validate duration length
+	if d > 168 * time.Hour || d == 0 * time.Hour  {
+		return "", fmt.Errorf("cannot set ttl to infinte or more than 7 days %v", err)
+	}
+
+	t, err := v.createOneTimeToken(ttl)
 	if err != nil {
 		return "", err
 	}
@@ -30,7 +50,9 @@ func (v vault) Store(msg string) (token string, err error) {
 	return t, nil
 }
 
-func (v vault) createOneTimeToken() (string, error) {
+func (v vault) createOneTimeToken(ttl string) (string, error) {
+	fmt.Println("Info: creating message with ttl: ", ttl)
+
 	c, err := v.newVaultClient()
 	if err != nil {
 		return "", err
@@ -40,8 +62,8 @@ func (v vault) createOneTimeToken() (string, error) {
 	var notRenewable bool
 	s, err := t.Create(&api.TokenCreateRequest{
 		Metadata:       map[string]string{"name": "placeholder"},
-		ExplicitMaxTTL: "24h",
-		NumUses:        2,
+		ExplicitMaxTTL: ttl,
+		NumUses:        2, //1 to create 2 to get
 		Renewable:      &notRenewable,
 	})
 	if err != nil {
@@ -107,3 +129,4 @@ func (v vault) newVaultClientWithToken(token string) (*api.Client, error) {
 	c.SetToken(token)
 	return c, nil
 }
+
