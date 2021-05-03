@@ -9,7 +9,7 @@ import (
 func main() {
 	conf := loadConfig()
 
-	handlers := NewSecretHandlers(newVault("", "")) // Vault address and token are taken from VAULT_ADDR and VAULT_TOKEN environment variables
+	handlers := NewSecretHandlers(newVault("", conf.VaultPrefix, "")) // Vault address and token are taken from VAULT_ADDR and VAULT_TOKEN environment variables
 	e := echo.New()
 
 	if conf.HttpsRedirectEnabled {

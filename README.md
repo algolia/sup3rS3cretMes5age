@@ -44,6 +44,7 @@ It is interesting to have TLS termination before the container so you don't have
 * `SUPERSECRETMESSAGE_TLS_AUTO_DOMAIN`: domain to use for "Auto" TLS, i.e. automatic generation of certificate with Let's Encrypt. See [Configuration examples - TLS - Auto TLS](#auto-tls).
 * `SUPERSECRETMESSAGE_TLS_CERT_FILEPATH`: certificate filepath to use for "manual" TLS.
 * `SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH`: certificate key filepath to use for "manual" TLS.
+* `SUPERSECRETMESSAGE_VAULT_PREFIX`: vault prefix for secrets (default `cubbyhole/`)
 
 ### Configuration examples
 
