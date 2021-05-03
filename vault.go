@@ -8,7 +8,7 @@ import (
 )
 
 type SecretMsgStorer interface {
-	Store(string, ttl string) (token string, err error)
+	Store(string, ttl string, numUses int) (token string, err error)
 	Get(token string) (msg string, err error)
 }
 
@@ -22,7 +22,7 @@ func newVault(address string, token string) vault {
 	return vault{address, token}
 }
 
-func (v vault) Store(msg string, ttl string) (token string, err error) {
+func (v vault) Store(msg string, ttl string, numUses int) (token string, err error) {
 	// Default TTL
 	if ttl == "" {
 		ttl = "48h"
@@ -36,10 +36,10 @@ func (v vault) Store(msg string, ttl string) (token string, err error) {
 
 	// validate duration length
 	if d > 168 * time.Hour || d == 0 * time.Hour  {
-		return "", fmt.Errorf("cannot set ttl to infinte or more than 7 days %v", err)
+		return "", fmt.Errorf("cannot set ttl to infinite or more than 7 days %v", err)
 	}
 
-	t, err := v.createOneTimeToken(ttl)
+	t, err := v.createSecretToken(ttl, numUses)
 	if err != nil {
 		return "", err
 	}
@@ -50,8 +50,8 @@ func (v vault) Store(msg string, ttl string) (token string, err error) {
 	return t, nil
 }
 
-func (v vault) createOneTimeToken(ttl string) (string, error) {
-	fmt.Println("Info: creating message with ttl: ", ttl)
+func (v vault) createSecretToken(ttl string, numUses int) (string, error) {
+	fmt.Printf("Info: creating message with ttl: %s, numUses %d\n", ttl, numUses)
 
 	c, err := v.newVaultClient()
 	if err != nil {
@@ -63,7 +63,7 @@ func (v vault) createOneTimeToken(ttl string) (string, error) {
 	s, err := t.Create(&api.TokenCreateRequest{
 		Metadata:       map[string]string{"name": "placeholder"},
 		ExplicitMaxTTL: ttl,
-		NumUses:        2, //1 to create 2 to get
+		NumUses:        numUses + 1, //1 to create 2 to get
 		Renewable:      &notRenewable,
 	})
 	if err != nil {
