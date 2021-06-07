@@ -48,11 +48,6 @@ func loadConfig() conf {
 			HttpsBindingAddressVarenv, TLSAutoDomainVarenv, TLSCertFilepathVarenv, TLSCertKeyFilepathVarenv)
 	}
 
-	if cnf.HttpsRedirectEnabled && cnf.TLSAutoDomain == "" && cnf.TLSCertFilepath == "" {
-		log.Fatalf("Either auto TLS (%s) or manual TLS (%s and %s) must be enabled to enable HTTPS redirection (%s)",
-			TLSAutoDomainVarenv, TLSCertFilepathVarenv, TLSCertKeyFilepathVarenv, HttpsRedirectEnabledVarenv)
-	}
-
 	if cnf.HttpBindingAddress == "" && cnf.TLSAutoDomain == "" && cnf.TLSCertFilepath == "" {
 		log.Fatalf("HTTP binding address (%s) must be set if auto TLS (%s) and manual TLS (%s and %s) are both disabled",
 			HttpBindingAddressVarenv, TLSAutoDomainVarenv, TLSCertFilepathVarenv, TLSCertKeyFilepathVarenv)
