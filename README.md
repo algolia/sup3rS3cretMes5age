@@ -45,7 +45,7 @@ It is interesting to have TLS termination before the container so you don't have
 * `SUPERSECRETMESSAGE_TLS_CERT_FILEPATH`: certificate filepath to use for "manual" TLS.
 * `SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH`: certificate key filepath to use for "manual" TLS.
 
-## Configuration Example
+## Configuration example
 Here is an example of a functionnal docker-compose.yml file
 ```yaml
 version: '3.2'
@@ -79,7 +79,7 @@ services:
       - vault
 ```
 
-### Configuration examples
+### Configuration types
 
 #### Plain HTTP
 ```bash
