@@ -45,7 +45,41 @@ It is interesting to have TLS termination before the container so you don't have
 * `SUPERSECRETMESSAGE_TLS_CERT_FILEPATH`: certificate filepath to use for "manual" TLS.
 * `SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH`: certificate key filepath to use for "manual" TLS.
 
-### Configuration examples
+## Configuration example
+Here is an example of a functionnal docker-compose.yml file
+```yaml
+version: '3.2'
+
+services:
+  vault:
+    image: vault:latest
+    container_name: vault
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: root
+    cap_add:
+      - IPC_LOCK
+    expose:
+      - 8200
+
+  supersecret:
+    build: ./
+    image: algolia/supersecretmessage:latest
+    container_name: supersecret
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root
+      SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS: ":80"
+      SUPERSECRETMESSAGE_HTTPS_BINDING_ADDRESS: ":443"
+      SUPERSECRETMESSAGE_HTTPS_REDIRECT_ENABLED: "true"
+      SUPERSECRETMESSAGE_TLS_AUTO_DOMAIN: secrets.example.com
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - vault
+```
+
+### Configuration types
 
 #### Plain HTTP
 ```bash
@@ -87,7 +121,7 @@ SUPERSECRETMESSAGE_TLS_CERT_FILEPATH=/mnt/ssl/cert_secrets.example.com.pem
 SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH=/mnt/ssl/key_secrets.example.com.pem
 ```
 
-### Screenshot
+## Screenshot
 
 <img width="610" alt="secretmsg" src="https://user-images.githubusercontent.com/357094/29357449-e9268adc-8277-11e7-8fef-b1eabfe62444.png">
 
