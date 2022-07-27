@@ -13,6 +13,7 @@ type conf struct {
 	TLSAutoDomain string
 	TLSCertFilepath string
 	TLSCertKeyFilepath string
+	VaultPrefix string
 }
 
 const HttpBindingAddressVarenv = "SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS"
@@ -21,6 +22,7 @@ const HttpsRedirectEnabledVarenv = "SUPERSECRETMESSAGE_HTTPS_REDIRECT_ENABLED"
 const TLSAutoDomainVarenv = "SUPERSECRETMESSAGE_TLS_AUTO_DOMAIN"
 const TLSCertFilepathVarenv = "SUPERSECRETMESSAGE_TLS_CERT_FILEPATH"
 const TLSCertKeyFilepathVarenv = "SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH"
+const VaultPrefixenv = "SUPERSECRETMESSAGE_VAULT_PREFIX"
 
 func loadConfig() conf {
 	var cnf conf
@@ -31,6 +33,7 @@ func loadConfig() conf {
 	cnf.TLSAutoDomain = os.Getenv(TLSAutoDomainVarenv)
 	cnf.TLSCertFilepath = os.Getenv(TLSCertFilepathVarenv)
 	cnf.TLSCertKeyFilepath = os.Getenv(TLSCertKeyFilepathVarenv)
+	cnf.VaultPrefix = os.Getenv(VaultPrefixenv)
 
 	if cnf.TLSAutoDomain != "" && (cnf.TLSCertFilepath != "" || cnf.TLSCertKeyFilepath != "") {
 		log.Fatalf("Auto TLS (%s) is mutually exclusive with manual TLS (%s and %s)", TLSAutoDomainVarenv,
@@ -58,12 +61,17 @@ func loadConfig() conf {
 			HttpsBindingAddressVarenv, TLSAutoDomainVarenv, TLSCertFilepathVarenv, TLSCertKeyFilepathVarenv)
 	}
 
+	if cnf.VaultPrefix == "" {
+		cnf.VaultPrefix = "cubbyhole/"
+	}
+
 	log.Println("[INFO] HTTP Binding Address:", cnf.HttpBindingAddress)
 	log.Println("[INFO] HTTPS Binding Address:", cnf.HttpsBindingAddress)
 	log.Println("[INFO] HTTPS Redirect enabled:", cnf.HttpsRedirectEnabled)
 	log.Println("[INFO] TLS Auto Domain:", cnf.TLSAutoDomain)
 	log.Println("[INFO] TLS Cert Filepath:", cnf.TLSCertFilepath)
 	log.Println("[INFO] TLS Cert Key Filepath:", cnf.TLSCertKeyFilepath)
+	log.Println("[INFO] Vault prefix:", cnf.VaultPrefix)
 
 	return cnf
 }

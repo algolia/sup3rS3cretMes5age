@@ -14,12 +14,13 @@ type SecretMsgStorer interface {
 
 type vault struct {
 	address string
+	prefix  string
 	token   string
 }
 
 // NewVault creates a vault client to talk with underline vault server
-func newVault(address string, token string) vault {
-	return vault{address, token}
+func newVault(address string, prefix string, token string) vault {
+	return vault{address, prefix, token}
 }
 
 func (v vault) Store(msg string, ttl string) (token string, err error) {
@@ -103,7 +104,7 @@ func (v vault) writeMsgToVault(token, msg string) error {
 
 	raw := map[string]interface{}{"msg": msg}
 
-	_, err = c.Logical().Write("/cubbyhole/"+token, raw)
+	_, err = c.Logical().Write("/" + v.prefix + token, raw)
 
 	return err
 }
@@ -114,7 +115,7 @@ func (v vault) Get(token string) (msg string, err error) {
 		return "", err
 	}
 
-	r, err := c.Logical().Read("cubbyhole/" + token)
+	r, err := c.Logical().Read(v.prefix + token)
 	if err != nil {
 		return "", err
 	}
