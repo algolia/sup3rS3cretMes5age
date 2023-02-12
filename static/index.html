@@ -11,7 +11,7 @@
   <meta name="theme-color" content="#ffffff">
   <!--Let browser know website is optimized for mobile-->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link href="/static/montserrat.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css?family=Montserrat" rel="stylesheet">
   <link rel="stylesheet" href="/static/application.css">
 </head>
 
@@ -20,7 +20,6 @@
     <div class="container">
       <h1>Secret Message</h1>
       <p class="subtitle">Send a secret one-time read only message</p>
-      <div class="container">
         <form id="secretform" action="/no-internet" method="POST" enctype="multipart/form-data">
 
           <div class="input-field">
@@ -53,76 +52,68 @@
             </button>
           </div>
         </div>
-      </div>
     </div>
-
   </main>
+  <footer>
+  <div class="footer">
+    <a href="https://github.com/algolia/sup3rS3cretMes5age" target="_blank">
+      <img src="/static/icons/github.png">
+    </a>
+  </div>
+</footer>
 </body>
-
-<script type="text/javascript" src="/static/clipboard.min.js" integrity="sha384-cV+rhyOuRHc9Ub/91rihWcGmMmCXDeksTtCihMupQHSsi8GIIRDG0ThDc3HGQFJ3"></script>
+<script src="https://code.jquery.com/jquery-3.6.3.min.js" integrity="sha256-pvPw+upLPUjgMXY0G+8O0xUf+/Im1MZjXxxgOcBQBXU=" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/1.7.1/clipboard.min.js"></script>
 <script type="text/javascript">
-  new Clipboard('.btn');
+new Clipboard(".btn");
 
-  const form = document.getElementById('secretform');
+$("#secretform").submit(function(e) {
+  e.preventDefault();
+  if (this.val === "") return false;
+  const form = new FormData($("#secretform")[0]);
 
-  form.addEventListener('submit', function (e) {
-    e.preventDefault();
-
-    const formData = new FormData(this);
-
-    fetch('/secret', {
-      method: 'POST',
-      body: formData,
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        applyCss(document.querySelector('.success-encrypted'), {
-          opacity: 1,
-          pointerEvents: 'auto',
-          visibility: 'visible',
-        });
-
-        applyCss(document.querySelector('.encrypt'), {
-          opacity: 0,
-          pointerEvents: 'none',
-          visibility: 'hidden',
-        });
-        applyCss(document.querySelector('.ttl'), {
-          opacity: 0,
-          pointerEvents: 'none',
-          visibility: 'hidden',
-        });
-        applyCss(document.querySelector('.input-field'), {
-          opacity: 0,
-          visibility: 'hidden',
-          pointerEvents: 'none',
-        });
-
-        showURL(data.token, data.filetoken, data.filename);
+  $.ajax({
+    type: "POST",
+    url: "/secret",
+    processData: false, // Important!
+    contentType: false,
+    cache: false,
+    data: form,
+    success(data) {
+      $(".success-encrypted").css({
+        opacity: 1,
+        pointerEvents: "auto",
+        visibility: "visible"
       });
-  });
-
-  function applyCss(element, css) {
-    Object.entries(css).forEach(([key, value]) => {
-      element.style[key] = value;
-    });
-  }
-
-  function showURL(token, filetoken, filename) {
-    const url = document.getElementById('url');
-    if (filetoken) {
-      url.textContent = `${
-        window.location.origin
-      }/getmsg?token=${encodeURIComponent(token)}&filetoken=${encodeURIComponent(
-        filetoken
-      )}&filename=${encodeURIComponent(filename)}`;
-    } else {
-      url.textContent = `${
-        window.location.origin
-      }/getmsg?token=${encodeURIComponent(token)}`;
+      $(".encrypt").css({
+        opacity: 0,
+        pointerEvents: "none",
+        visibility: "hidden"
+      });
+      $(".ttl").css({
+        opacity: 0,
+        pointerEvents: "none",
+        visibility: "hidden"
+      });
+      $(".input-field").css({
+        opacity: 0,
+        visibility: "hidden",
+        pointerEvents: "none"
+      });
+      showURL(data.token, data.filetoken, data.filename);
     }
-  }
+  });
+});
 
+function showURL(token, filetoken, filename) {
+  if (filetoken) {
+    $("#url").text(
+      `${window.location.origin}/getmsg?token=${encodeURIComponent(token)}&filetoken=${encodeURIComponent(filetoken)}&filename=${encodeURIComponent(filename)}`
+    );
+    return;
+  }
+  $("#url").text(`${window.location.origin}/getmsg?token=${encodeURIComponent(token)}`);
+}
 </script>
 
 </html>

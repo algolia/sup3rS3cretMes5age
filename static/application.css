@@ -15,7 +15,8 @@ html,body {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0;
+  color: transparent;
+  text-shadow: 0 0 5px rgba(0,0,0,0.5);
 }
 
 h1{
@@ -85,4 +86,57 @@ button {
 .send {
   text-align: center;
   color: white; 
+}
+
+div.footer {
+   position: absolute;
+   height: 24px;
+   right: 10px;
+   bottom: 10px;
+}
+
+div.footer img {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 32px;
+  height: auto;
+}
+
+.slidecontainer {
+  width: 100%;
+}
+
+.slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 25px;
+  border-radius: 5px;
+  background: #d3d3d3;
+  outline: none;
+  opacity: 0.7;
+  -webkit-transition: .2s;
+  transition: opacity .2s;
+}
+
+.slider:hover {
+  opacity: 1;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 35px;
+  height: 35px;
+  border-radius: 5px;
+  background: #4CAF50;
+  cursor: pointer;
+}
+
+.slider::-moz-range-thumb {
+  width: 35px;
+  height: 35px;
+  border-radius: 5px;
+  background: #4CAF50;
+  cursor: pointer;
 }
