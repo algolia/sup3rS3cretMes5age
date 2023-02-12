@@ -11,19 +11,19 @@ import (
 )
 
 func main() {
+	conf := loadConfig()
 
-	conf := getConfig()
-
-	handlers := NewSecretHandlers(newVault("", ""))
+	handlers := NewSecretHandlers(newVault("", conf.VaultPrefix, "")) // Vault address and token are taken from VAULT_ADDR and VAULT_TOKEN environment variables
 	e := echo.New()
 
-	e.Pre(middleware.HTTPSRedirect())
+	if conf.HttpsRedirectEnabled {
+		e.Pre(middleware.HTTPSRedirect())
+	}
 
-	//AutoTLS
-	e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(conf.Domain)
-
-	// Cache certificates
-	e.AutoTLSManager.Cache = autocert.DirCache("/var/www/.cache")
+	if conf.TLSAutoDomain != "" {
+		e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(conf.TLSAutoDomain)
+		e.AutoTLSManager.Cache = autocert.DirCache("/var/www/.cache")
+	}
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.BodyLimit("50M"))
@@ -38,6 +38,15 @@ func main() {
 	e.File("/getmsg", "static/getmsg.html")
 	e.Static("/static", "static")
 
+	if conf.HttpBindingAddress != "" {
+		if conf.HttpsBindingAddress != "" {
+			go func(c *echo.Echo) {
+				e.Logger.Fatal(e.Start(conf.HttpBindingAddress))
+			}(e)
+		} else {
+			e.Logger.Fatal(e.Start(conf.HttpBindingAddress))
+		}
+	}
 
         autoTLSManager := autocert.Manager{
 		Prompt: autocert.AcceptTOS,
