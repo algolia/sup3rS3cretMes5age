@@ -27,6 +27,7 @@ func main() {
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.BodyLimit("50M"))
+	e.Use(middleware.Secure())
 
 	e.GET("/", redirect)
 	e.File("/robots.txt", "static/robots.txt")
