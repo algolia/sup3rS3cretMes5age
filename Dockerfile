@@ -1,6 +1,4 @@
-FROM golang:1.15 AS builder
-
-ENV GO111MODULE=on
+FROM golang:1.18 AS builder
 
 WORKDIR /go/src/github.com/algolia/sup3rS3cretMes5age
 
