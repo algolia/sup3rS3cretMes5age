@@ -45,6 +45,8 @@
                 <button class="btn clipboard"  type="submit" data-clipboard-target="#textarea1" name="action">Copy to clipboard
               
             </button>
+                <button class="btn encrypt"  type="submit" name="newMsg" onclick="window.location.href=window.location.origin;">Send a secret message
+            </button>
             </div>
         </div>
     </main>
@@ -155,7 +157,6 @@
 
                 return new Blob(byteArrays, {type: contentType});
             }
-
     </script>
     <footer>
   <div class="footer">
