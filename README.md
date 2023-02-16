@@ -129,3 +129,8 @@ SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH=/mnt/ssl/key_secrets.example.com.pem
 ## Contributing
 
 Pull requests are very welcome!
+
+
+## Thanks!
+
+This project is heavaily depandent on [Echo Go Web Framework](https://github.com/labstack/echo)and on Hashicorp Vault. 
