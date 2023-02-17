@@ -10,6 +10,8 @@ services:
       - IPC_LOCK
     expose:
       - 8200
+    ports:
+      - "8200:8200"
 
   supersecret:
     build: ./
