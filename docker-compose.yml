@@ -1,27 +1,26 @@
 version: '3.2'
 
 services:
-  vault:
-    image: vault:latest
-    container_name: vault
-    environment:
-      VAULT_DEV_ROOT_TOKEN_ID: supersecret
-    cap_add:
-      - IPC_LOCK
-    expose:
-      - 8200
-    ports:
-      - "8200:8200"
+  # vault:
+  #   image: vault:latest
+  #   container_name: vault
+  #   environment:
+  #     VAULT_DEV_ROOT_TOKEN_ID: supersecret
+  #   cap_add:
+  #     - IPC_LOCK
+  #   expose:
+  #     - 8200
+  #   ports:
+  #     - "8200:8200"
 
   supersecret:
     build: ./
     image: algolia/supersecretmessage:latest
     container_name: supersecret
     environment:
-      VAULT_ADDR: http://vault:8200
-      VAULT_TOKEN: supersecret
+      VAULT_ADDR: http://host.docker.internal:8200
+      VAULT_TOKEN:  hvs.CAESIHLe68M7Xy2RoWXbbj8CIDXKc-svbNHWFpENcnaZdn3QGh4KHGh2cy5KbXhiVUxGRDl4NEk0aEdEWlFmQlhUems
       SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS: ":8082"
     ports:
       - "8082:8082"
-    depends_on:
-      - vault
+    

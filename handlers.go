@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 
@@ -60,8 +61,10 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 
 	// Handle the secret message
 	msg := ctx.FormValue("msg")
+	fmt.Println("Trying to put msg in vault")
 	tr.Token, err = s.store.Store(msg, ttl)
 	if err != nil {
+		fmt.Println("This error occured:", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
 
