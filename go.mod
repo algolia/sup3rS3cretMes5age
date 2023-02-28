@@ -4,7 +4,6 @@ go 1.18
 
 require (
 	github.com/hashicorp/vault/api v1.3.1
-	github.com/labstack/echo v3.3.10+incompatible
 	github.com/labstack/echo/v4 v4.10.0
 	github.com/ory/dockertest/v3 v3.9.1
 	golang.org/x/crypto v0.2.0
