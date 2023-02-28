@@ -4,20 +4,24 @@ import (
 	"crypto/tls"
 	"net/http"
 
-	"github.com/labstack/echo"
-	"github.com/labstack/echo/middleware"
+	"crypto/tls"
+	"net/http"
+
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 )
 
 func main() {
+	conf := loadConfig()
 
-	conf := getConfig()
-
-	handlers := NewSecretHandlers(newVault("", ""))
+	handlers := NewSecretHandlers(newVault("", conf.VaultPrefix, "")) // Vault address and token are taken from VAULT_ADDR and VAULT_TOKEN environment variables
 	e := echo.New()
 
-	e.Pre(middleware.HTTPSRedirect())
+	if conf.HttpsRedirectEnabled {
+		e.Pre(middleware.HTTPSRedirect())
+	}
 
 	//AutoTLS
 	autoTLSManager := autocert.Manager{
@@ -29,6 +33,7 @@ func main() {
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.BodyLimit("50M"))
+	e.Use(middleware.Secure())
 
 	e.GET("/", redirect)
 	e.File("/robots.txt", "static/robots.txt")

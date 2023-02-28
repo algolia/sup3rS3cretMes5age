@@ -2,7 +2,17 @@
 <html>
 
 <head>
-
+    <title>sup3rS3cretMes5age</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16x16.png">
+    <link rel="manifest" href="/static/icons/manifest.json">
+    <link rel="mask-icon" href="/static/icons/safari-pinned-tab.svg" color="#5bbad5">
+    <meta name="theme-color" content="#ffffff">
+  <!--Let browser know website is optimized for mobile-->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link href="https://fonts.googleapis.com/css?family=Montserrat" rel="stylesheet">
+    <link rel="stylesheet" href="/static/application.css">
 
 
     <!--Let browser know website is optimized for mobile-->
@@ -11,22 +21,31 @@
 
 <body>
     <!--Import jQuery before materialize.js-->
-    <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.3.min.js" integrity="sha256-pvPw+upLPUjgMXY0G+8O0xUf+/Im1MZjXxxgOcBQBXU=" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/1.6.1/clipboard.min.js"></script>
     <link rel="stylesheet" href="/static/application.css">
     <main class="send">
         <div class="container">
             <h1>Secret Message</h1>
             <p class="subtitle">Get your secret one-time read only message</p>
-            <div class="input-field">
+                
+
+                <div class="slidecontainer">
+                    <h2>Drag the slider to display the Secret Message</h2>
+                    <input type="range" min="0" max="100" value="0" step="5" class="slider" id="myRange">
+                </div>
+            
+            <div class="input-field" style="display:none">
 
 
-                <textarea id="textarea1" name="msg" readonly=true class="materialize-textarea" placeholder="Message should appear here"></textarea>
+                <textarea  id="textarea1" name="msg" readonly=true class="materialize-textarea" placeholder="Message should appear here"></textarea>
 
             </div>
-            <div class="button">
-                <button class="btn clipboard" type="submit" data-clipboard-target="#textarea1" name="action">Copy to clipboard
+            <div class="button" style="display:none">
+                <button class="btn clipboard"  type="submit" data-clipboard-target="#textarea1" name="action">Copy to clipboard
               
+            </button>
+                <button class="btn encrypt"  type="submit" name="newMsg" onclick="window.location.href=window.location.origin;">Send a secret message
             </button>
             </div>
         </div>
@@ -34,7 +53,16 @@
 
 
     <script type="text/javascript">
-        $(document).ready(function () {
+        var slider = document.getElementById("myRange");
+
+        slider.oninput = function() {
+            if (this.value == 100){
+             showSecret();
+            }
+        }
+
+        //$(document).ready(function () {
+        function showSecret() {
             new Clipboard('.btn');
 
             let params = (new URL(window.location)).searchParams;
@@ -53,15 +81,26 @@
                     showMsg("Message was already deleted :(")
                 },
             });
-        });
+        };
 
         function showMsg(msg, filetoken, filename) {
             $('#pbar').hide()
-            $('#textarea1').text(msg)
+
+            $('#textarea1').text(msg) 
             if (filetoken) {
                 console.log('filetoken=', filetoken)
                 getSecret(filetoken, filename)
             }
+           
+            // Hide slider
+            $('.slidecontainer').toggle();
+            // Show secret text box
+            $('.input-field').toggle();
+            // Show copy to clipboard button
+            $('.button').toggle();
+            // Reset slider (in case of back button)
+            slider.value = 0;
+
         }
 
         function getSecret(token, name) {
@@ -118,8 +157,15 @@
 
                 return new Blob(byteArrays, {type: contentType});
             }
-
     </script>
+    <footer>
+  <div class="footer">
+    <a href="https://github.com/algolia/sup3rS3cretMes5age" target="_blank">
+      <img src="/static/icons/github.png">
+    </a>
+  </div>
+</footer>
+
     <!-- Facebook/Slack Meta Tags-->
     <meta property="og:title" content="Self Destructing Secure Message" />
     <meta property="og:image" content="https://github.com/eranchetz/secretMsg" />

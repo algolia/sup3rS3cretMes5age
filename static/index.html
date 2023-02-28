@@ -20,7 +20,6 @@
     <div class="container">
       <h1>Secret Message</h1>
       <p class="subtitle">Send a secret one-time read only message</p>
-      <div class="container">
         <form id="secretform" action="/no-internet" method="POST" enctype="multipart/form-data">
 
           <div class="input-field">
@@ -53,12 +52,17 @@
             </button>
           </div>
         </div>
-      </div>
     </div>
-
   </main>
+  <footer>
+  <div class="footer">
+    <a href="https://github.com/algolia/sup3rS3cretMes5age" target="_blank">
+      <img src="/static/icons/github.png">
+    </a>
+  </div>
+</footer>
 </body>
-<script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.3.min.js" integrity="sha256-pvPw+upLPUjgMXY0G+8O0xUf+/Im1MZjXxxgOcBQBXU=" crossorigin="anonymous"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/1.7.1/clipboard.min.js"></script>
 <script type="text/javascript">
 new Clipboard(".btn");

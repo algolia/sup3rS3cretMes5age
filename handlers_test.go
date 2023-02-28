@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/labstack/echo"
+	"github.com/labstack/echo/v4"
 )
 
 type FakeSecretMsgStorer struct {
@@ -49,7 +49,7 @@ func TestGetMsgHandlerSuccess(t *testing.T) {
 		t.Fatalf("got statusCode %d, expected %d", rec.Code, http.StatusOK)
 	}
 
-	expected := `{"msg":"secret"}`
+	expected := "{\"msg\":\"secret\"}\n"
 	actual := rec.Body.String()
 	if expected != actual {
 		t.Fatalf("got body %s, expected %s", expected, actual)

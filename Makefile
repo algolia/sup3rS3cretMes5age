@@ -15,12 +15,12 @@ clean:
 	@docker-compose rm -fv
 
 run-local: clean
-	@DOMAIN=$(DOMAIN) \
-	docker-compose up --build -d
+        @DOMAIN=$(DOMAIN) \
+        docker-compose up --build -d
 
 run: 
 	@DOMAIN=$(DOMAIN) \
-	docker-compose up --build -d
+        docker-compose up --build -d
 
 logs:
 	@docker-compose logs -f

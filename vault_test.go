@@ -1,13 +1,12 @@
 package main
 
 import (
-
-	"testing"
 	"log"
 	"os"
+	"testing"
 
 	"github.com/hashicorp/vault/api"
-	dockertest "gopkg.in/ory-am/dockertest.v3"
+	dockertest "github.com/ory/dockertest/v3"
 )
 
 var c *api.Client
@@ -54,29 +53,26 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-
 func TestStore(t *testing.T) {
 	v := newVault(c.Address(), c.Token())
 
-	var storeParams =  []struct {
+	var storeParams = []struct {
 		secret string
-		ttl string
+		ttl    string
 	}{
-	// don't allow infinte ttl 
-	{"my secret", "0h",},
-	// don't allow more than a week ttl
-	{"my secret", "169h",},
+		// don't allow infinte ttl
+		{"my secret", "0h"},
+		// don't allow more than a week ttl
+		{"my secret", "169h"},
 	}
 
 	for _, tt := range storeParams {
 		_, err := v.Store(tt.secret, tt.ttl)
 
-			if err == nil {
-				t.Fatalf("expected error, got: nil")
-			}
+		if err == nil {
+			t.Fatalf("expected error, got: nil")
+		}
 	}
-
-
 
 }
 
