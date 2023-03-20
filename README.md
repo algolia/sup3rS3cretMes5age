@@ -129,6 +129,7 @@ SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH=/mnt/ssl/key_secrets.example.com.pem
 ## Contributing
 
 Pull requests are very welcome!
+They will be reviewed by our team at Algolia.
 
 
 ## Thanks!
