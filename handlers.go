@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 
 	"github.com/labstack/echo/v4"
 )
@@ -31,6 +32,7 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 
 	//Get TTL (if any)
 	ttl := ctx.FormValue("ttl")
+	viewcount, _ := strconv.Atoi(ctx.FormValue("viewcount"))
 
 	// Upload file if any
 	file, err := ctx.FormFile("file")
@@ -50,7 +52,7 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 			tr.FileName = file.Filename
 			encodedFile := base64.StdEncoding.EncodeToString(b)
 
-			filetoken, err := s.store.Store(encodedFile, ttl)
+			filetoken, err := s.store.Store(encodedFile, ttl, viewcount)
 			if err != nil {
 				return echo.NewHTTPError(http.StatusInternalServerError, err)
 			}
@@ -60,7 +62,7 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 
 	// Handle the secret message
 	msg := ctx.FormValue("msg")
-	tr.Token, err = s.store.Store(msg, ttl)
+	tr.Token, err = s.store.Store(msg, ttl, viewcount)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}

@@ -23,7 +23,7 @@ func (f *FakeSecretMsgStorer) Get(token string) (msg string, err error) {
 	return f.msg, f.err
 }
 
-func (f *FakeSecretMsgStorer) Store(msg string, ttl string) (token string, err error) {
+func (f *FakeSecretMsgStorer) Store(msg string, ttl string, viewcount int) (token string, err error) {
 	f.lastMsg = msg
 	return f.token, f.err
 }

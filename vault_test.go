@@ -56,7 +56,7 @@ func TestMain(m *testing.M) {
 func TestStoreAndGet(t *testing.T) {
 	v := newVault(c.Address(), "test/", c.Token())
 	secret := "my secret"
-	token, err := v.Store(secret, "")
+	token, err := v.Store(secret, "", 1)
 	if err != nil {
 		t.Fatalf("no error expected, got %v", err)
 	}
@@ -74,7 +74,7 @@ func TestStoreAndGet(t *testing.T) {
 func TestMsgCanOnlyBeAccessedOnce(t *testing.T) {
 	v := newVault(c.Address(), "test/", c.Token())
 	secret := "my secret"
-	token, err := v.Store(secret, "")
+	token, err := v.Store(secret, "", 1)
 	if err != nil {
 		t.Fatalf("no error expected, got %v", err)
 	}
