@@ -34,6 +34,9 @@ Whatever deployment method you choose, **you should always run this behind SSL/T
 Depending on your infrastructure/deployment, you can have **TLS termination** either _inside the container_ (see [Configuration examples - TLS](#tls)), or _before_ e.g. at a load balancer/reverse proxy in front of the service.
 It is interesting to have TLS termination before the container so you don't have to manage the certificate/key there, but **make sure the network** between your TLS termination point and your container **is secure**.
 
+## Helm
+For full documentation for this chart, please see the [README](https://github.com/algolia/sup3rS3cretMes5age/blob/master/charts/README.md)
+
 ## Configuration options
 
 * `VAULT_ADDR`: address of the Vault server used for storing the temporary secrets.
