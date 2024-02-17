@@ -137,4 +137,6 @@ They will be reviewed by our team at Algolia.
 
 ## Thanks!
 
-This project is heavaily depandent on [Echo Go Web Framework](https://github.com/labstack/echo)and on Hashicorp Vault. 
+This project is heavily depandent on [Echo Go Web Framework](https://github.com/labstack/echo) and on Hashicorp Vault. 
+
+[![This project is certified Awesome F/OSS](https://awsmfoss.com/content/images/2024/02/awsm-foss-badge.600x128.rounded.png)](https://awsmfoss.com/sup3rs3cretmes5age)
