@@ -132,9 +132,10 @@ SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH=/mnt/ssl/key_secrets.example.com.pem
 ## Contributing
 
 Pull requests are very welcome!
-They will be reviewed by our team at Algolia.
+Please consider that they will be reviewed by our team at Algolia.
 
 
 ## Thanks!
 
-This project is heavaily depandent on [Echo Go Web Framework](https://github.com/labstack/echo)and on Hashicorp Vault. 
+This project is heavaily depandent on the amazing work of the [Echo Go Web Framework](https://github.com/labstack/echo) and Hashicorp Vault. 
+
