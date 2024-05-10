@@ -2,11 +2,9 @@
 #
 #!BuildTag: opensuse/algolia/sup3rS3cretMes5age:latest opensuse/algolia/sup3rS3cretMes5age:%PKG_VERSION% opensuse/algolia/sup3rS3cretMes5age:%PKG_VERSION%.%RELEASE%
 
-FROM opensuse/tumbleweed AS builder
+FROM opensuse/golang AS builder
 
 WORKDIR /tmp
-
-RUN zypper --non-interactive in go
 
 COPY sup3rS3cretMes5age-0.3.0.tar.xz ./
 COPY vendor.tar.gz ./
@@ -16,7 +14,7 @@ RUN tar xf sup3rS3cretMes5age-0.3.0.tar.xz && \
   tar xf xf ../vendor.tar.gz && \
   CGO_ENABLED=0 go build -buildmode=pie -mod=vendor -a -ldflags '-extldflags "-static"' -o sup3rS3cretMes5age .
 
-FROM alpine:latest
+FROM opàensuse:busybox
 
 # labelprefix=org.opensuse.example
 LABEL org.opencontainers.image.title="sup3rS3cretMes5age"
@@ -38,9 +36,7 @@ ENV \
     SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH \
     SUPERSECRETMESSAGE_VAULT_PREFIX
 
-RUN \
-    apk add --no-cache ca-certificates ;\
-    mkdir -p /opt/supersecret/static
+RUN mkdir -p /opt/supersecret/static
 
 WORKDIR /opt/supersecret
 
