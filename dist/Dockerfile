@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: MIT
 #
-#!BuildTag: opensuse/algolia/sup3rs3cretmes5age:latest opensuse/algolia/sup3rs3cretmes5age:%PKG_VERSION% opensuse/algolia/sup3rs3cretmes5age:%PKG_VERSION%.%RELEASE%
+#!BuildTag: opensuse/algolia/sup3rs3cretmes5age:latest opensuse/algolia/sup3rs3cretmes5age:0.3.0
 
 FROM opensuse/tumbleweed AS builder
 
@@ -22,10 +22,8 @@ FROM opensuse/busybox
 # labelprefix=org.opensuse.example
 LABEL org.opencontainers.image.title="sup3rs3cretmes5age"
 LABEL org.opencontainers.image.description="A simple, secure self-destructing message service, using HashiCorp Vault product as a backend."
-LABEL org.opencontainers.image.version="%PKG_VERSION%.%RELEASE%"
-LABEL org.opensuse.reference="registry.opensuse.org/opensuse/algolia/sup3rs3cretmes5age:%PKG_VERSION%.%RELEASE%"
-LABEL org.openbuildservice.disturl="%DISTURL%"
-LABEL org.opencontainers.image.created="%BUILDTIME%"
+LABEL org.opencontainers.image.version="0.3.0"
+LABEL org.opensuse.reference="registry.opensuse.org/opensuse/algolia/sup3rs3cretmes5age:0.3.0"
 # endlabelprefix
 
 ENV \
