@@ -7,13 +7,13 @@ import (
 )
 
 type conf struct {
-	HttpBindingAddress string
-	HttpsBindingAddress string
+	HttpBindingAddress   string
+	HttpsBindingAddress  string
 	HttpsRedirectEnabled bool
-	TLSAutoDomain string
-	TLSCertFilepath string
-	TLSCertKeyFilepath string
-	VaultPrefix string
+	TLSAutoDomain        string
+	TLSCertFilepath      string
+	TLSCertKeyFilepath   string
+	VaultPrefix          string
 }
 
 const HttpBindingAddressVarenv = "SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS"
