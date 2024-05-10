@@ -1,7 +1,7 @@
 Name: sup3rS3cretMes5age
 Version: 0.3.0
 Release: 1%{?dist}
-Summary: A simple, secure self-destructing message service.
+Summary: A simple, secure self-destructing message service
 Group: Productivity/Networking/Security
 License: MPL-2.0
 URL: https://github.com/algolia/sup3rS3cretMes5age
@@ -26,10 +26,14 @@ CGO_ENABLED=0 go build -buildmode=pie -mod=vendor -a -ldflags '-extldflags "-sta
 
 %install
 install -d %{buildroot}/%{_bindir}
+install -d %{buildroot}/opt/supersecret/static
 install -m 0755 sup3rS3cretMes5age %{buildroot}/%{_bindir}
+cp -R static/* %{buildroot}/opt/supersecret/static/
 
 %files
 %attr(0755,root,root) %{_bindir}/sup3rS3cretMes5age
+%attr(0755,root,root) %dir /opt/supersecret
+%attr(-,root,root) /opt/supersecret/static
 
 %changelog
 * Tue May 07 2024 Jeremy Jacque <jeremy.jacque@algolia.com> 0.3.0-1

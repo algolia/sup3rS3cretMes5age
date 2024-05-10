@@ -25,9 +25,13 @@ override_dh_auto_configure:
 override_dh_auto_test:
 endif
 
+override_dh_auto_clean:
+
 override_dh_auto_build:
 	CGO_ENABLED=$(CGO) go build $(GOFLAGS) -o sup3rS3cretMes5age .
 
 override_dh_auto_install:
 	install -d $(CURDIR)/debian/tmp/usr/bin
+	install -d $(CURDIR)/debian/tmp/opt/supersecret/static
 	install -m 0755 sup3rS3cretMes5age $(CURDIR)/debian/tmp/usr/bin/
+	cp -R static/* $(CURDIR)/debian/tmp/opt/supersecret/static/

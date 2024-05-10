@@ -1,10 +1,13 @@
 # SPDX-License-Identifier: MIT
 #
-#!BuildTag: opensuse/algolia/sup3rS3cretMes5age:latest opensuse/algolia/sup3rS3cretMes5age:%PKG_VERSION% opensuse/algolia/sup3rS3cretMes5age:%PKG_VERSION%.%RELEASE%
+#!BuildTag: opensuse/algolia/sup3rs3cretmes5age:latest opensuse/algolia/sup3rs3cretmes5age:%PKG_VERSION% opensuse/algolia/sup3rs3cretmes5age:%PKG_VERSION%.%RELEASE%
 
-FROM opensuse/golang AS builder
+FROM opensuse/tumbleweed AS builder
 
 WORKDIR /tmp
+RUN zypper addrepo https://download.opensuse.org/repositories/openSUSE:Factory/standard/openSUSE:Factory.repo && \
+  zypper refresh && \
+  zypper --non-interactive in go
 
 COPY sup3rS3cretMes5age-0.3.0.tar.xz ./
 COPY vendor.tar.gz ./
@@ -14,13 +17,13 @@ RUN tar xf sup3rS3cretMes5age-0.3.0.tar.xz && \
   tar xf xf ../vendor.tar.gz && \
   CGO_ENABLED=0 go build -buildmode=pie -mod=vendor -a -ldflags '-extldflags "-static"' -o sup3rS3cretMes5age .
 
-FROM opàensuse:busybox
+FROM opensuse/busybox
 
 # labelprefix=org.opensuse.example
-LABEL org.opencontainers.image.title="sup3rS3cretMes5age"
+LABEL org.opencontainers.image.title="sup3rs3cretmes5age"
 LABEL org.opencontainers.image.description="A simple, secure self-destructing message service, using HashiCorp Vault product as a backend."
 LABEL org.opencontainers.image.version="%PKG_VERSION%.%RELEASE%"
-LABEL org.opensuse.reference="registry.opensuse.org/opensuse/algolia/sup3rS3cretMes5age:%PKG_VERSION%.%RELEASE%"
+LABEL org.opensuse.reference="registry.opensuse.org/opensuse/algolia/sup3rs3cretmes5age:%PKG_VERSION%.%RELEASE%"
 LABEL org.openbuildservice.disturl="%DISTURL%"
 LABEL org.opencontainers.image.created="%BUILDTIME%"
 # endlabelprefix

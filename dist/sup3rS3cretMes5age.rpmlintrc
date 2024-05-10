@@ -1,1 +1,2 @@
 addFilter("statically-linked-binary .*/usr/bin/sup3rS3cretMes5age")
+addFilter("suse-filelist-forbidden-opt .*//opt/supersecret")

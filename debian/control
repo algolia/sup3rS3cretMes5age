@@ -1,12 +1,12 @@
-Source: sup3rS3cretMes5age
+Source: sup3rs3cretmes5age
 Section: net
 Priority: optional
 Maintainer: Jeremy Jacque <jeremy.jacque@algolia.com>
 Build-Depends: debhelper (>=10), make, golang-1.22
 Standards-Version: 0.1
-Homepage: https://github.com/algolia/sup3rS3cretMes5age
+Homepage: https://github.com/algolia/sup3rs3cretmes5age
 
-Package: sup3rS3cretMes5age
+Package: sup3rs3cretmes5age
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${misc:Depends}, ${shlibs:Depends}

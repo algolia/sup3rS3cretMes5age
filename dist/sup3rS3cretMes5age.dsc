@@ -1,7 +1,7 @@
 Format: 3.0 (native)
 DEBTRANSFORM-RELEASE: 1
-Source: sup3rS3cretMes5age
-Binary: sup3rS3cretMes5age
+Source: sup3rs3cretmes5age
+Binary: sup3rs3cretmes5age
 Architecture: any
 Version: 0.3.0
 DEBTRANSFORM-TAR: sup3rS3cretMes5age-0.3.0.tar.xz
@@ -10,4 +10,4 @@ Homepage: https://github.com/algolia/sup3rS3cretMes5age
 Standards-Version: 4.5.10
 Build-Depends: debhelper, make, golang-1.22
 Package-List:
- sup3rS3cretMes5age deb base optional arch=any
+ sup3rs3cretmes5age deb base optional arch=any
