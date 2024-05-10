@@ -1,0 +1,33 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+#
+export DH_VERBOSE=1
+
+USERNAME := $(shell echo $$USER)
+GOLDFLAGS := -ldflags '-extldflags "-static"'
+GOFLAGS := -buildmode=pie  -mod=vendor -a $(GOLDFLAGS)
+OSDESC := $(shell . /etc/os-release && echo $$ID)
+ifeq ($(OSDESC),raspbian)
+CGO := 1
+else
+CGO := 0
+endif
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+%:
+	dh $@
+
+ifeq ($(USERNAME), abuild)
+override_dh_auto_configure:
+	tar xf ../SOURCES/vendor.tar.gz
+
+override_dh_auto_test:
+endif
+
+override_dh_auto_build:
+	CGO_ENABLED=$(CGO) go build $(GOFLAGS) -o sup3rS3cretMes5age .
+
+override_dh_auto_install:
+	install -d $(CURDIR)/debian/tmp/usr/bin
+	install -m 0755 sup3rS3cretMes5age $(CURDIR)/debian/tmp/usr/bin/
