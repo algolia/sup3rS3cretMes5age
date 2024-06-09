@@ -14,23 +14,23 @@ image:
 	docker build -t algolia/supersecretmessage $(DOCKER_OPS) .
 
 build: 
-	@docker-compose $(COMPOSE_OPTS) build
+	@docker compose $(COMPOSE_OPTS) build
 
 clean:
-	@docker-compose $(COMPOSE_OPTS) rm -fv
+	@docker compose $(COMPOSE_OPTS) rm -fv
 
 run-local: clean
         @DOMAIN=$(DOMAIN) \
-	docker-compose $(COMPOSE_OPTS) up --build -d
+	docker compose $(COMPOSE_OPTS) up --build -d
 
 run: 
 	@DOMAIN=$(DOMAIN) \
-        docker-compose $(COMPOSE_OPTS) up --build -d
+        docker compose $(COMPOSE_OPTS) up --build -d
 
 logs:
-	@docker-compose $(COMPOSE_OPTS) logs -f
+	@docker compose $(COMPOSE_OPTS) logs -f
 
 stop:
-	@docker-compose $(COMPOSE_OPTS) stop
+	@docker compose $(COMPOSE_OPTS) stop
 
 .PHONY: test image build clean run-local run logs stop
