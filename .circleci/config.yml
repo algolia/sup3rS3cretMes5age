@@ -23,7 +23,7 @@ jobs:
             if [ "${CPVER}" = "v0.3.0" ]
             then
               CPDIR="$(go list -m -json "github.com/hashicorp/go-secure-stdlib/plugincontainer"| jq -r '.Dir')"
-              sed -i 's@types\.Container@container.@g' "${CPDIR}/container_runner.go"
+              sudo sed -i 's@types\.Container@container.@g' "${CPDIR}/container_runner.go"
             fi
       - run:
           name: Go fmt
@@ -39,7 +39,7 @@ jobs:
           command: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2
       - run:
           name: GolangCI Lint
-          command: golangci-lint run
+          command: golangci-lint run --timeout 300s
       - save_cache: &save-cache
           paths:
             - /home/circleci/go/pkg/mod
@@ -47,7 +47,6 @@ jobs:
   test:
     executor: golang
     steps:
-      - setup_remote_docker
       - checkout
       - restore_cache:
           <<: *restore-cache
@@ -59,13 +58,11 @@ jobs:
             if [ "${CPVER}" = "v0.3.0" ]
             then
               CPDIR="$(go list -m -json "github.com/hashicorp/go-secure-stdlib/plugincontainer"| jq -r '.Dir')"
-              sed -i 's@types\.Container@container.@g' "${CPDIR}/container_runner.go"
+              sudo sed -i 's@types\.Container@container.@g' "${CPDIR}/container_runner.go"
             fi
       - run:
           name: Test
           command: |
-            env
-            unset DOCKER_MACHINE_NAME
             make test
       - save_cache:
           <<: *save-cache
