@@ -2,9 +2,11 @@ FROM golang:1.21 AS builder
 
 WORKDIR /go/src/github.com/algolia/sup3rS3cretMes5age
 
+ARG VERSION
+
 COPY . .
 RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildmode=pie -a -ldflags '-s -w -extldflags "-static"' -o /tmp/sup3rS3cretMes5age cmd/sup3rS3cretMes5age/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildmode=pie -a -ldflags "-X main.version=${VERSION} -s -w -extldflags '-static'" -o /tmp/sup3rS3cretMes5age cmd/sup3rS3cretMes5age/main.go
 
 
 FROM alpine:latest

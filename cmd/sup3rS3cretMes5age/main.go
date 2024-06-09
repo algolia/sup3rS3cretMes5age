@@ -2,7 +2,10 @@ package main
 
 import (
 	"crypto/tls"
+	"flag"
+	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/algolia/sup3rS3cretMes5age/internal"
 	"github.com/labstack/echo/v4"
@@ -11,7 +14,16 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
+var version = ""
+
 func main() {
+	versionFlag := flag.Bool("version", false, "Print version")
+	flag.Parse()
+	if *versionFlag {
+		fmt.Println(version)
+		os.Exit(0)
+	}
+
 	conf := internal.LoadConfig()
 
 	// Vault address and token are taken from VAULT_ADDR and VAULT_TOKEN environment variables

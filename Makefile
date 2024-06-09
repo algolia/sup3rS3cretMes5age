@@ -7,11 +7,20 @@ DOMAIN ?= localhost
 COMPOSE_OPTS := -f deploy/docker-compose.yml
 DOCKER_OPS := -f deploy/Dockerfile
 
+TAG=$(shell git describe --tags --abbrev=0)
+VERSION=$(shell echo "$(TAG)" | sed -e 's/^v//')
+COMMIT=$(shell git rev-parse --short HEAD)
+
 test:
 	go test ./... -v
 
 image:
-	docker build -t algolia/supersecretmessage $(DOCKER_OPS) .
+	docker build \
+		--build-arg VERSION=${VERSION} \
+		-t algolia/supersecretmessage:${VERSION} \
+		-t algolia/supersecretmessage:${COMMIT} \
+		-t algolia/supersecretmessage:latest \
+		$(DOCKER_OPS) .
 
 build: 
 	@docker compose $(COMPOSE_OPTS) build
