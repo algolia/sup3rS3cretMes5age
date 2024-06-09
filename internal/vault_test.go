@@ -19,7 +19,13 @@ func TestMain(m *testing.M) {
 	}
 
 	// pulls an image, creates a container based on it and runs it
-	resource, err := pool.Run("vault", "latest", []string{"VAULT_ADDR", "VAULT_DEV_ROOT_TOKEN_ID=rootsecret"})
+	dro := &dockertest.RunOptions{
+		Repository: "hashicorp/vault",
+		Tag:        "latest",
+		Env:        []string{"VAULT_DEV_ROOT_TOKEN_ID=rootsecret"},
+		CapAdd:     []string{"IPC_LOCK"},
+	}
+	resource, err := pool.RunWithOptions(dro)
 	if err != nil {
 		log.Fatalf("Could not start resource: %s", err)
 	}
