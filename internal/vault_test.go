@@ -1,66 +1,47 @@
 package internal
 
 import (
-	"log"
-	"os"
+	"net"
 	"testing"
 
 	"github.com/hashicorp/vault/api"
-	dockertest "github.com/ory/dockertest/v3"
+	vaulthttp "github.com/hashicorp/vault/http"
+	hashivault "github.com/hashicorp/vault/vault"
 )
 
-var c *api.Client
+func createTestVault(t *testing.T) (net.Listener, *api.Client) {
+	t.Helper()
 
-func TestMain(m *testing.M) {
-	// uses a sensible default on windows (tcp/http) and linux/osx (socket)
-	pool, err := dockertest.NewPool("")
+	// Create an in-memory, unsealed core (the "backend", if you will).
+	core, _, rootToken := hashivault.TestCoreUnsealed(t)
+
+	// Start an HTTP server for the core.
+	ln, addr := vaulthttp.TestServer(t, core)
+
+	// Create a client that talks to the server, initially authenticating with
+	// the root token.
+	conf := api.DefaultConfig()
+	conf.Address = addr
+
+	c, err := api.NewClient(conf)
 	if err != nil {
-		log.Fatalf("Could not connect to docker: %s", err)
+		t.Fatal(err)
 	}
+	c.SetToken(rootToken)
 
-	// pulls an image, creates a container based on it and runs it
-	dro := &dockertest.RunOptions{
-		Repository: "hashicorp/vault",
-		Tag:        "latest",
-		Env:        []string{"VAULT_DEV_ROOT_TOKEN_ID=rootsecret"},
-		CapAdd:     []string{"IPC_LOCK"},
-	}
-	resource, err := pool.RunWithOptions(dro)
+	_, err = c.Sys().Health()
 	if err != nil {
-		log.Fatalf("Could not start resource: %s", err)
+		t.Fatal(err)
 	}
 
-	// exponential backoff-retry, because the application in the container might not be ready to accept connections yet
-	if err := pool.Retry(func() error {
-		var err error
-		c, err = api.NewClient(api.DefaultConfig())
-		if err != nil {
-			return err
-		}
-		c.SetToken("rootsecret")
-		err = c.SetAddress("http://127.0.0.1:" + resource.GetPort("8200/tcp"))
-		if err != nil {
-			return err
-		}
-
-		_, err = c.Sys().Health()
-		return err
-	}); err != nil {
-		log.Fatalf("Could not connect to docker: %s", err)
-	}
-
-	code := m.Run()
-
-	// You can't defer this because os.Exit doesn't care for defer
-	if err := pool.Purge(resource); err != nil {
-		log.Fatalf("could not purge resource: %s", err)
-	}
-
-	os.Exit(code)
+	return ln, c
 }
 
 func TestStoreAndGet(t *testing.T) {
-	v := NewVault(c.Address(), "test/", c.Token())
+	ln, c := createTestVault(t)
+	defer ln.Close()
+
+	v := NewVault(c.Address(), "secret/test/", c.Token())
 	secret := "my secret"
 	token, err := v.Store(secret, "")
 	if err != nil {
@@ -78,7 +59,10 @@ func TestStoreAndGet(t *testing.T) {
 }
 
 func TestMsgCanOnlyBeAccessedOnce(t *testing.T) {
-	v := NewVault(c.Address(), "test/", c.Token())
+	ln, c := createTestVault(t)
+	defer ln.Close()
+
+	v := NewVault(c.Address(), "secret/test/", c.Token())
 	secret := "my secret"
 	token, err := v.Store(secret, "")
 	if err != nil {
