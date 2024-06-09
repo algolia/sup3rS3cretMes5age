@@ -41,7 +41,7 @@ func TestStoreAndGet(t *testing.T) {
 	ln, c := createTestVault(t)
 	defer ln.Close()
 
-	v := NewVault(c.Address(), "secret/test/", c.Token())
+	v := newVault(c.Address(), "secret/test/", c.Token())
 	secret := "my secret"
 	token, err := v.Store(secret, "")
 	if err != nil {
@@ -62,7 +62,7 @@ func TestMsgCanOnlyBeAccessedOnce(t *testing.T) {
 	ln, c := createTestVault(t)
 	defer ln.Close()
 
-	v := NewVault(c.Address(), "secret/test/", c.Token())
+	v := newVault(c.Address(), "secret/test/", c.Token())
 	secret := "my secret"
 	token, err := v.Store(secret, "")
 	if err != nil {

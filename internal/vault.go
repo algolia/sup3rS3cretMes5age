@@ -20,7 +20,7 @@ type vault struct {
 }
 
 // NewVault creates a vault client to talk with underline vault server
-func NewVault(address string, prefix string, token string) vault {
+func newVault(address string, prefix string, token string) vault {
 	v := vault{address, prefix, token}
 
 	go v.newVaultClientToRenewToken()

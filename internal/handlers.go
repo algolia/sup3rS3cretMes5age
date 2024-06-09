@@ -22,7 +22,7 @@ type SecretHandlers struct {
 	store SecretMsgStorer
 }
 
-func NewSecretHandlers(s SecretMsgStorer) *SecretHandlers {
+func newSecretHandlers(s SecretMsgStorer) *SecretHandlers {
 	return &SecretHandlers{s}
 }
 
@@ -79,10 +79,10 @@ func (s SecretHandlers) GetMsgHandler(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, r)
 }
 
-func HealthHandler(ctx echo.Context) error {
+func healthHandler(ctx echo.Context) error {
 	return ctx.String(http.StatusOK, http.StatusText(http.StatusOK))
 }
 
-func RedirectHandler(ctx echo.Context) error {
+func redirectHandler(ctx echo.Context) error {
 	return ctx.Redirect(http.StatusPermanentRedirect, "/msg")
 }
