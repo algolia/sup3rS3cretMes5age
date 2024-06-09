@@ -6,10 +6,15 @@ ARG VERSION
 
 COPY . .
 RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildmode=pie -a -ldflags "-X main.version=${VERSION} -s -w -extldflags '-static'" -o /tmp/sup3rS3cretMes5age cmd/sup3rS3cretMes5age/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -a -ldflags "-X main.version=${VERSION} -s -w -extldflags '-static'" -o /tmp/sup3rS3cretMes5age cmd/sup3rS3cretMes5age/main.go
 
 
 FROM alpine:latest
+
+WORKDIR /opt/supersecret
+
+COPY --from=builder /tmp/sup3rS3cretMes5age .
+COPY web/static/ /opt/supersecret/static/
 
 ENV \
     VAULT_ADDR \
@@ -22,13 +27,7 @@ ENV \
     SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH \
     SUPERSECRETMESSAGE_VAULT_PREFIX
 
-RUN \
-    apk add --no-cache ca-certificates ;\
-    mkdir -p /opt/supersecret/static
+RUN apk add --no-cache ca-certificates
 
-WORKDIR /opt/supersecret
 
-COPY --from=builder /tmp/sup3rS3cretMes5age .
-COPY web/static/ /opt/supersecret/static/
-
-CMD [ "./sup3rS3cretMes5age" ]
+CMD ["./sup3rS3cretMes5age" ]
