@@ -1,4 +1,4 @@
-# sup3rS3cretMes5age!
+# sup3rS3cretMes5age
 
 A simple, secure self-destructing message service, using HashiCorp Vault product as a backend.
 
@@ -21,13 +21,14 @@ Optionally, you can modify the `deploy/docker-compose.yml` and tweak the options
 ### Production Deployment
 
 We recommend deploying the project via **Docker** and a **container orchestration tool**:
+
 * Build the Docker image using the provided `Dockerfile` or run `make image`
 * Host it in a Docker registry ([Docker Hub](https://hub.docker.com/), [AWS ECR](https://aws.amazon.com/ecr/), etc.)
 * Deploy the image (alongside with a standalone Vault server) using a container orchestration tool ([Kubernetes](https://kubernetes.io/), [Docker Swarm](https://docs.docker.com/engine/swarm/), [AWS ECS](https://aws.amazon.com/ecs/), etc.)
 
 You can read the [configuration examples](#configuration-examples) below.
 
-### Security notice!
+### Security notice
 
 Whatever deployment method you choose, **you should always run this behind SSL/TLS**, otherwise secrets will be sent _unencrypted_!
 
@@ -35,6 +36,7 @@ Depending on your infrastructure/deployment, you can have **TLS termination** ei
 It is interesting to have TLS termination before the container so you don't have to manage the certificate/key there, but **make sure the network** between your TLS termination point and your container **is secure**.
 
 ## Helm
+
 For full documentation for this chart, please see the [README](https://github.com/algolia/sup3rS3cretMes5age/blob/master/deployments/charts/README.md)
 
 ## Configuration options
@@ -49,7 +51,8 @@ For full documentation for this chart, please see the [README](https://github.co
 * `SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH`: certificate key filepath to use for "manual" TLS.
 * `SUPERSECRETMESSAGE_VAULT_PREFIX`: vault prefix for secrets (default `cubbyhole/`)
 
-## Configuration example
+## Configuration examples
+
 Here is an example of a functionnal docker-compose.yml file
 ```yaml
 version: '3.2'
@@ -86,6 +89,7 @@ services:
 ### Configuration types
 
 #### Plain HTTP
+
 ```bash
 VAULT_ADDR=http://vault:8200
 VAULT_TOKEN=root
@@ -96,6 +100,7 @@ SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS=:80
 #### TLS
 
 ##### Auto TLS
+
 ```bash
 VAULT_ADDR=http://vault:8200
 VAULT_TOKEN=root
@@ -105,6 +110,7 @@ SUPERSECRETMESSAGE_TLS_AUTO_DOMAIN=secrets.example.com
 ```
 
 ##### Auto TLS with HTTP > HTTPS redirection
+
 ```bash
 VAULT_ADDR=http://vault:8200
 VAULT_TOKEN=root
@@ -116,6 +122,7 @@ SUPERSECRETMESSAGE_TLS_AUTO_DOMAIN=secrets.example.com
 ```
 
 ##### Manual TLS
+
 ```bash
 VAULT_ADDR=http://vault:8200
 VAULT_TOKEN=root
@@ -127,7 +134,7 @@ SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH=/mnt/ssl/key_secrets.example.com.pem
 
 ## Screenshot
 
-<img width="610" alt="secretmsg" src="https://user-images.githubusercontent.com/357094/29357449-e9268adc-8277-11e7-8fef-b1eabfe62444.png">
+![supersecretmsg](https://user-images.githubusercontent.com/357094/29357449-e9268adc-8277-11e7-8fef-b1eabfe62444.png)
 
 ## Contributing
 
@@ -135,7 +142,7 @@ Pull requests are very welcome!
 Please consider that they will be reviewed by our team at Algolia.
 
 
-## Thanks!
+## Thanks
 
 This project is heavaily depandent on the amazing work of the [Echo Go Web Framework](https://github.com/labstack/echo) and Hashicorp Vault. 
 
