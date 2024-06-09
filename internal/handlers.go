@@ -2,7 +2,7 @@ package internal
 
 import (
 	"encoding/base64"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -41,7 +41,7 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 		}
 		defer src.Close()
 
-		b, err := ioutil.ReadAll(src)
+		b, err := io.ReadAll(src)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err)
 		}

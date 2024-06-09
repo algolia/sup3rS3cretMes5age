@@ -110,7 +110,7 @@ func TestRedirectHandler(t *testing.T) {
 		t.Fatalf("got statusCode %d, expected %d", rec.Code, http.StatusOK)
 	}
 
-	l := rec.HeaderMap.Get("Location")
+	l := rec.Result().Header.Get("Location")
 	if l != "/msg" {
 		t.Fatalf("redirect Location is %s, expected %s", l, "/msg")
 	}
