@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"log"
@@ -54,7 +54,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestStoreAndGet(t *testing.T) {
-	v := newVault(c.Address(), "test/", c.Token())
+	v := NewVault(c.Address(), "test/", c.Token())
 	secret := "my secret"
 	token, err := v.Store(secret, "")
 	if err != nil {
@@ -72,7 +72,7 @@ func TestStoreAndGet(t *testing.T) {
 }
 
 func TestMsgCanOnlyBeAccessedOnce(t *testing.T) {
-	v := newVault(c.Address(), "test/", c.Token())
+	v := NewVault(c.Address(), "test/", c.Token())
 	secret := "my secret"
 	token, err := v.Store(secret, "")
 	if err != nil {

@@ -12,16 +12,16 @@ Now using [Let's Encrypt](https://letsencrypt.org/) for simple and free SSL cert
 
 ### Testing it locally
 
-You can just run `docker-compose up --build`: it will build the Docker image and then run it alongside a standalone Vault server.
+You can just run `docker-compose up -f deploy/docker-compose.yml --build` or run `make build`: it will build the Docker image and then run it alongside a standalone Vault server.
 
-By default, the `docker-compose.yml` is configured to run the webapp on port 8082 in cleartext HTTP (so you can access it on [http://localhost:8082](http://localhost:8082)).
+By default, the `deploy/docker-compose.yml` is configured to run the webapp on port 8082 in cleartext HTTP (so you can access it on [http://localhost:8082](http://localhost:8082)).
 
-Optionally, you can modify the `docker-compose.yml` and tweak the options (enable HTTPS, disable HTTP or enable redirection to HTTPS, etc.). See [Configuration options](#configuration-options).
+Optionally, you can modify the `deploy/docker-compose.yml` and tweak the options (enable HTTPS, disable HTTP or enable redirection to HTTPS, etc.). See [Configuration options](#configuration-options).
 
 ### Production Deployment
 
 We recommend deploying the project via **Docker** and a **container orchestration tool**:
-* Build the Docker image using the provided `Dockerfile`
+* Build the Docker image using the provided `Dockerfile` or run `make image`
 * Host it in a Docker registry ([Docker Hub](https://hub.docker.com/), [AWS ECR](https://aws.amazon.com/ecr/), etc.)
 * Deploy the image (alongside with a standalone Vault server) using a container orchestration tool ([Kubernetes](https://kubernetes.io/), [Docker Swarm](https://docs.docker.com/engine/swarm/), [AWS ECS](https://aws.amazon.com/ecs/), etc.)
 
@@ -35,7 +35,7 @@ Depending on your infrastructure/deployment, you can have **TLS termination** ei
 It is interesting to have TLS termination before the container so you don't have to manage the certificate/key there, but **make sure the network** between your TLS termination point and your container **is secure**.
 
 ## Helm
-For full documentation for this chart, please see the [README](https://github.com/algolia/sup3rS3cretMes5age/blob/master/charts/README.md)
+For full documentation for this chart, please see the [README](https://github.com/algolia/sup3rS3cretMes5age/blob/master/deployments/charts/README.md)
 
 ## Configuration options
 

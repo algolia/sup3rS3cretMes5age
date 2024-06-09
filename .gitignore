@@ -3,5 +3,6 @@ vendor/**/
 nginx/**/
 static/.well-known
 *.pem
-sup3rS3cretMes5age
+*.key
+/sup3rS3cretMes5age
 .DS_Store

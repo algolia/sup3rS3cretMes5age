@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"errors"
@@ -101,7 +101,7 @@ func TestRedirectHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	err := redirect(c)
+	err := RedirectHandler(c)
 	if err != nil {
 		t.Fatalf("error returned %v, expected nil", err)
 	}

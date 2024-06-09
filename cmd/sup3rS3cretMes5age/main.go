@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"net/http"
 
+	"github.com/algolia/sup3rS3cretMes5age/internal"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"golang.org/x/crypto/acme"
@@ -11,9 +12,10 @@ import (
 )
 
 func main() {
-	conf := loadConfig()
+	conf := internal.LoadConfig()
 
-	handlers := NewSecretHandlers(newVault("", conf.VaultPrefix, "")) // Vault address and token are taken from VAULT_ADDR and VAULT_TOKEN environment variables
+	// Vault address and token are taken from VAULT_ADDR and VAULT_TOKEN environment variables
+	handlers := internal.NewSecretHandlers(internal.NewVault("", conf.VaultPrefix, ""))
 	e := echo.New()
 
 	if conf.HttpsRedirectEnabled {
@@ -29,10 +31,10 @@ func main() {
 	e.Use(middleware.BodyLimit("50M"))
 	e.Use(middleware.Secure())
 
-	e.GET("/", redirect)
+	e.GET("/", internal.RedirectHandler)
 	e.File("/robots.txt", "static/robots.txt")
 
-	e.Any("/health", HealthHandler)
+	e.Any("/health", internal.HealthHandler)
 	e.GET("/secret", handlers.GetMsgHandler)
 	e.POST("/secret", handlers.CreateMsgHandler)
 	e.File("/msg", "static/index.html")

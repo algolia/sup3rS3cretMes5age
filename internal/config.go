@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"log"
@@ -24,7 +24,7 @@ const TLSCertFilepathVarenv = "SUPERSECRETMESSAGE_TLS_CERT_FILEPATH"
 const TLSCertKeyFilepathVarenv = "SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH"
 const VaultPrefixenv = "SUPERSECRETMESSAGE_VAULT_PREFIX"
 
-func loadConfig() conf {
+func LoadConfig() conf {
 	var cnf conf
 
 	cnf.HttpBindingAddress = os.Getenv(HttpBindingAddressVarenv)
