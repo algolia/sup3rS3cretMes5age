@@ -4,8 +4,13 @@
 export DH_VERBOSE=1
 
 USERNAME := $(shell echo $$USER)
-GOLDFLAGS := -ldflags '-extldflags "-static"'
-GOFLAGS := -buildmode=pie  -mod=vendor -a $(GOLDFLAGS)
+
+TAG=$(shell git describe --tags --abbrev=0)
+VERSION=$(shell echo "$(TAG)" | sed -e 's/^v//')
+
+GOLDFLAGS := -ldflags "-X main.version=$(VERSION) -s -w -extldflags '-static'"
+GOFLAGS := -buildmode=pie -mod=vendor -trimpath -a $(GOLDFLAGS)
+
 OSDESC := $(shell . /etc/os-release && echo $$ID)
 ifeq ($(OSDESC),raspbian)
 CGO := 1
@@ -28,10 +33,10 @@ endif
 override_dh_auto_clean:
 
 override_dh_auto_build:
-	CGO_ENABLED=$(CGO) go build $(GOFLAGS) -o sup3rS3cretMes5age .
+	CGO_ENABLED=$(CGO) go build $(GOFLAGS) -o sup3rS3cretMes5age cmd/sup3rS3cretMes5age/main.go
 
 override_dh_auto_install:
 	install -d $(CURDIR)/debian/tmp/usr/bin
 	install -d $(CURDIR)/debian/tmp/opt/supersecret/static
 	install -m 0755 sup3rS3cretMes5age $(CURDIR)/debian/tmp/usr/bin/
-	cp -R static/* $(CURDIR)/debian/tmp/opt/supersecret/static/
+	cp -R web/static/* $(CURDIR)/debian/tmp/opt/supersecret/static/

@@ -14,7 +14,8 @@ COPY vendor.tar.gz ./
 RUN tar xf sup3rS3cretMes5age-%PKG_VERSION%.tar.xz && \
   cd sup3rS3cretMes5age-%PKG_VERSION% && \
   tar xf ../vendor.tar.gz && \
-  CGO_ENABLED=0 go build -buildmode=pie -mod=vendor -a -ldflags '-extldflags "-static"' -o sup3rS3cretMes5age .
+  ls -l && \
+  CGO_ENABLED=0 go build -mod=vendor -trimpath -a -ldflags "-X main.version=%PKG_VERSION% -s -w -extldflags '-static'" -o sup3rS3cretMes5age cmd/sup3rS3cretMes5age/main.go
 
 
 FROM opensuse/tumbleweed
@@ -41,14 +42,10 @@ ENV \
     SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH \
     SUPERSECRETMESSAGE_VAULT_PREFIX
 
-RUN mkdir -p /opt/supersecret/static
-
 WORKDIR /opt/supersecret
 
 COPY --from=builder /etc/ssl/ /etc/ssl/
 COPY --from=builder /tmp/sup3rS3cretMes5age-%PKG_VERSION%/sup3rS3cretMes5age .
-COPY --from=builder /tmp/sup3rS3cretMes5age-%PKG_VERSION%/static /opt/supersecret/static
-
-RUN ls -l /etc/ssl/*
+COPY --from=builder /tmp/sup3rS3cretMes5age-%PKG_VERSION%/web/static /opt/supersecret/static
 
 CMD [ "./sup3rS3cretMes5age" ]
