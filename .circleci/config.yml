@@ -1,0 +1,76 @@
+version: 2.1
+
+executors:
+  golang:
+    docker:
+      - image: cimg/go:1.21
+
+jobs:
+  lint:
+    executor: golang
+    steps:
+      - checkout
+      # Download and cache dependencies
+      - restore_cache: &restore-cache
+          keys:
+            - go-mod-{{ checksum "go.sum" }}
+      - run:
+          name: Install dependencies
+          command: |
+            go mod download
+            # This a crappy fix as https://github.com/hashicorp/go-secure-stdlib/pull/125 has not been merged
+            CPVER="$(go list -m -json "github.com/hashicorp/go-secure-stdlib/plugincontainer"| jq -r '.Version')"
+            if [ "${CPVER}" = "v0.3.0" ]
+            then
+              CPDIR="$(go list -m -json "github.com/hashicorp/go-secure-stdlib/plugincontainer"| jq -r '.Dir')"
+              sudo sed -i 's@types\.Container@container.@g' "${CPDIR}/container_runner.go"
+            fi
+      - run:
+          name: Go fmt
+          command: |
+            RES="$(gofmt -s -l .)"
+            if [ -n "${RES}" ]
+            then
+              echo "${RES}"
+              exit 1
+            fi
+      - run:
+          name: Install golangci-lint
+          command: curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2
+      - run:
+          name: GolangCI Lint
+          command: golangci-lint run --timeout 300s
+      - save_cache: &save-cache
+          paths:
+            - /home/circleci/go/pkg/mod
+          key: go-mod-{{ checksum "go.sum" }}
+  test:
+    executor: golang
+    steps:
+      - checkout
+      - restore_cache:
+          <<: *restore-cache
+      - run:
+          name: Install dependencies
+          command: |
+            go mod download
+            CPVER="$(go list -m -json "github.com/hashicorp/go-secure-stdlib/plugincontainer"| jq -r '.Version')"
+            if [ "${CPVER}" = "v0.3.0" ]
+            then
+              CPDIR="$(go list -m -json "github.com/hashicorp/go-secure-stdlib/plugincontainer"| jq -r '.Dir')"
+              sudo sed -i 's@types\.Container@container.@g' "${CPDIR}/container_runner.go"
+            fi
+      - run:
+          name: Test
+          command: |
+            make test
+      - save_cache:
+          <<: *save-cache
+
+workflows:
+  lint_test:
+    jobs:
+      - lint
+      - test:
+          requires:
+            - lint

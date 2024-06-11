@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"errors"
@@ -35,7 +35,7 @@ func TestGetMsgHandlerSuccess(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	s := &FakeSecretMsgStorer{msg: "secret"}
-	h := NewSecretHandlers(s)
+	h := newSecretHandlers(s)
 	err := h.GetMsgHandler(c)
 	if err != nil {
 		t.Fatalf("got error %v, none expected", err)
@@ -63,7 +63,7 @@ func TestGetMsgHandlerError(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	s := &FakeSecretMsgStorer{msg: "secret", err: errors.New("expired")}
-	h := NewSecretHandlers(s)
+	h := newSecretHandlers(s)
 	err := h.GetMsgHandler(c)
 	if err == nil {
 		t.Fatalf("got no error, expected one")
@@ -85,7 +85,7 @@ func TestHealthHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	err := HealthHandler(c)
+	err := healthHandler(c)
 	if err != nil {
 		t.Fatalf("error returned %v, expected nil", err)
 	}
@@ -101,7 +101,7 @@ func TestRedirectHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	err := redirect(c)
+	err := redirectHandler(c)
 	if err != nil {
 		t.Fatalf("error returned %v, expected nil", err)
 	}
@@ -110,7 +110,7 @@ func TestRedirectHandler(t *testing.T) {
 		t.Fatalf("got statusCode %d, expected %d", rec.Code, http.StatusOK)
 	}
 
-	l := rec.HeaderMap.Get("Location")
+	l := rec.Result().Header.Get("Location")
 	if l != "/msg" {
 		t.Fatalf("redirect Location is %s, expected %s", l, "/msg")
 	}

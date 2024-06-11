@@ -9,14 +9,14 @@
 html,body {
   min-width: 100vw;
   min-height: 100vh;
-  font-family: 'Montserrat', sans-serif;
+  font-family: Montserrat, sans-serif;
   background-image: linear-gradient(to bottom left, #3e366a, #09112f);
   -webkit-font-smoothing: antialiased;
   display: flex;
   align-items: center;
   justify-content: center;
   color: transparent;
-  text-shadow: 0 0 5px rgba(0,0,0,0.5);
+  text-shadow: 0 0 5px rgba(0 0 0 50%);
 }
 
 h1{
@@ -38,8 +38,8 @@ button {
   cursor: pointer;
   margin-top: 32px;
   min-width: 210px;
-  color: white;
-  box-shadow: 0 2px 6px 0 rgba(5,15,44,0.5);
+  color: rgb(255 255 255);
+  box-shadow: 0 2px 6px 0 rgba(5 15 44 50%);
   padding: 0 20px;
   display: inline-block;
   border-radius: 50px;
@@ -76,6 +76,7 @@ button {
   pointer-events: none;
   width: 100%;
 }
+
 .subtitle {
   margin-top: 4px;
   margin-bottom: 32px;

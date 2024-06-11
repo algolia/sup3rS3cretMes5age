@@ -1,8 +1,8 @@
-package main
+package internal
 
 import (
 	"encoding/base64"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -22,7 +22,7 @@ type SecretHandlers struct {
 	store SecretMsgStorer
 }
 
-func NewSecretHandlers(s SecretMsgStorer) *SecretHandlers {
+func newSecretHandlers(s SecretMsgStorer) *SecretHandlers {
 	return &SecretHandlers{s}
 }
 
@@ -41,7 +41,7 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 		}
 		defer src.Close()
 
-		b, err := ioutil.ReadAll(src)
+		b, err := io.ReadAll(src)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err)
 		}
@@ -79,10 +79,10 @@ func (s SecretHandlers) GetMsgHandler(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, r)
 }
 
-func HealthHandler(ctx echo.Context) error {
+func healthHandler(ctx echo.Context) error {
 	return ctx.String(http.StatusOK, http.StatusText(http.StatusOK))
 }
 
-func redirect(ctx echo.Context) error {
+func redirectHandler(ctx echo.Context) error {
 	return ctx.Redirect(http.StatusPermanentRedirect, "/msg")
 }

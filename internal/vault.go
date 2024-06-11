@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"fmt"
@@ -171,5 +171,4 @@ func (v vault) newVaultClientToRenewToken() {
 			log.Printf("auth token: successfully renewed; remaining duration: %ds", info.Secret.Auth.LeaseDuration)
 		}
 	}
-
 }

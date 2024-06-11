@@ -2,23 +2,30 @@ version: '3.2'
 
 services:
   vault:
-    image: vault:latest
+    image: hashicorp/vault:latest
     container_name: vault
     environment:
       VAULT_DEV_ROOT_TOKEN_ID: supersecret
     cap_add:
       - IPC_LOCK
+    security_opt:
+      - no-new-privileges:true
     expose:
       - 8200
 
   supersecret:
-    build: ./
+    build:
+      context: ../
+      dockerfile: deploy/Dockerfile
     image: algolia/supersecretmessage:latest
     container_name: supersecret
     environment:
       VAULT_ADDR: http://vault:8200
       VAULT_TOKEN: supersecret
       SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS: ":8082"
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
     ports:
       - "8082:8082"
     depends_on:

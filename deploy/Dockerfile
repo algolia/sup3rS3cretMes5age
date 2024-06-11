@@ -1,14 +1,20 @@
-FROM golang:1.18 AS builder
+FROM golang:1.21 AS builder
 
 WORKDIR /go/src/github.com/algolia/sup3rS3cretMes5age
 
-ADD . .
+ARG VERSION
 
+COPY . .
 RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -o sup3rS3cretMes5age .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -a -ldflags "-X main.version=${VERSION} -s -w -extldflags '-static'" -o /tmp/sup3rS3cretMes5age cmd/sup3rS3cretMes5age/main.go
 
 
 FROM alpine:latest
+
+WORKDIR /opt/supersecret
+
+COPY --from=builder /tmp/sup3rS3cretMes5age .
+COPY web/static/ /opt/supersecret/static/
 
 ENV \
     VAULT_ADDR \
@@ -21,13 +27,7 @@ ENV \
     SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH \
     SUPERSECRETMESSAGE_VAULT_PREFIX
 
-RUN \
-    apk add --no-cache ca-certificates ;\
-    mkdir -p /opt/supersecret/static
+RUN apk add --no-cache ca-certificates
 
-WORKDIR /opt/supersecret
 
-COPY --from=builder /go/src/github.com/algolia/sup3rS3cretMes5age/sup3rS3cretMes5age .
-COPY static /opt/supersecret/static
-
-CMD [ "./sup3rS3cretMes5age" ]
+CMD ["./sup3rS3cretMes5age" ]
