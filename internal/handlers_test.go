@@ -4,10 +4,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"testing"
 
 	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 )
 
 type FakeSecretMsgStorer struct {
@@ -37,23 +37,11 @@ func TestGetMsgHandlerSuccess(t *testing.T) {
 	s := &FakeSecretMsgStorer{msg: "secret"}
 	h := newSecretHandlers(s)
 	err := h.GetMsgHandler(c)
-	if err != nil {
-		t.Fatalf("got error %v, none expected", err)
-	}
 
-	if s.lastUsedToken != "secrettoken" {
-		t.Fatalf("Storer::Get was called with %s, expected %s", s.lastUsedToken, "secrettoken")
-	}
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("got statusCode %d, expected %d", rec.Code, http.StatusOK)
-	}
-
-	expected := "{\"msg\":\"secret\"}\n"
-	actual := rec.Body.String()
-	if expected != actual {
-		t.Fatalf("got body %s, expected %s", expected, actual)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, "secrettoken", s.lastUsedToken)
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "{\"msg\":\"secret\"}\n", rec.Body.String())
 }
 
 func TestGetMsgHandlerError(t *testing.T) {
@@ -65,17 +53,11 @@ func TestGetMsgHandlerError(t *testing.T) {
 	s := &FakeSecretMsgStorer{msg: "secret", err: errors.New("expired")}
 	h := newSecretHandlers(s)
 	err := h.GetMsgHandler(c)
-	if err == nil {
-		t.Fatalf("got no error, expected one")
-	}
 
-	v, ok := err.(*echo.HTTPError)
-	if !ok {
-		t.Fatalf("expected an HTTPError, got %s", reflect.TypeOf(v))
-	}
-
-	if v.Code != http.StatusInternalServerError {
-		t.Fatalf("got statusCode %d, expected %d", v.Code, http.StatusInternalServerError)
+	assert.Error(t, err)
+	if assert.IsType(t, &echo.HTTPError{}, err) {
+		v, _ := err.(*echo.HTTPError)
+		assert.Equal(t, http.StatusInternalServerError, v.Code)
 	}
 }
 
@@ -86,13 +68,9 @@ func TestHealthHandler(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	err := healthHandler(c)
-	if err != nil {
-		t.Fatalf("error returned %v, expected nil", err)
-	}
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("got statusCode %d, expected %d", rec.Code, http.StatusOK)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
 func TestRedirectHandler(t *testing.T) {
@@ -102,16 +80,8 @@ func TestRedirectHandler(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	err := redirectHandler(c)
-	if err != nil {
-		t.Fatalf("error returned %v, expected nil", err)
-	}
+	assert.NoError(t, err)
 
-	if rec.Code != http.StatusPermanentRedirect {
-		t.Fatalf("got statusCode %d, expected %d", rec.Code, http.StatusOK)
-	}
-
-	l := rec.Result().Header.Get("Location")
-	if l != "/msg" {
-		t.Fatalf("redirect Location is %s, expected %s", l, "/msg")
-	}
+	assert.Equal(t, http.StatusPermanentRedirect, rec.Code)
+	assert.Equal(t, "/msg", rec.Result().Header.Get("Location"))
 }
