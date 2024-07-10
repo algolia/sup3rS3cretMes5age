@@ -8,6 +8,7 @@ require (
 	github.com/hashicorp/vault v1.16.3
 	github.com/hashicorp/vault/api v1.14.0
 	github.com/labstack/echo/v4 v4.12.0
+	github.com/stretchr/testify v1.9.0
 	golang.org/x/crypto v0.24.0
 )
 
@@ -241,7 +242,6 @@ require (
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
-	github.com/stretchr/testify v1.9.0 // indirect
 	github.com/tencentcloud/tencentcloud-sdk-go v1.0.162 // indirect
 	github.com/tklauser/go-sysconf v0.3.10 // indirect
 	github.com/tklauser/numcpus v0.4.0 // indirect
