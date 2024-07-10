@@ -24,9 +24,17 @@ func Serve(cnf conf) {
 		e.AutoTLSManager.Cache = autocert.DirCache("/var/www/.cache")
 	}
 
-	e.Use(middleware.Logger())
+	// // Limit to 10 RPS (only human should use this service)
+	e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(10)))
+	// do not log the /health endpoint
+	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
+		Skipper: func(c echo.Context) bool {
+			return c.Path() == "/health"
+		},
+	}))
 	e.Use(middleware.BodyLimit("50M"))
 	e.Use(middleware.Secure())
+	e.Use(middleware.Recover())
 
 	e.GET("/", redirectHandler)
 	e.File("/robots.txt", "static/robots.txt")
