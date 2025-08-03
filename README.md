@@ -39,6 +39,20 @@ It is interesting to have TLS termination before the container so you don't have
 
 For full documentation for this chart, please see the [README](https://github.com/algolia/sup3rS3cretMes5age/blob/master/deployments/charts/README.md)
 
+## Command Line Usage
+
+For convenient command line integration and automation, see our comprehensive [CLI Guide](CLI.md) which includes shell functions for Bash, Zsh, Fish, and WSL.
+
+Quick example:
+```bash
+# Add to your ~/.bashrc or ~/.zshrc
+o() { cat "$@" | curl -sF 'msg=<-' https://your-domain.com/secret | jq -r .token | awk '{print "https://your-domain.com/getmsg?token="$1}'; }
+
+# Usage
+echo "secret message" | o
+o secret-file.txt
+```
+
 ## Configuration options
 
 * `VAULT_ADDR`: address of the Vault server used for storing the temporary secrets.
