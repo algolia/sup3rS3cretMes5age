@@ -62,57 +62,86 @@
   </div>
 </footer>
 </body>
-<script type="text/javascript" src="/static/jquery-3.7.1.min.js"></script>
-<script type="text/javascript" src="/static/clipboard-1.7.1.min.js"></script>
+<script type="text/javascript" src="/static/clipboard-2.0.11.min.js"></script>
 <script type="text/javascript">
-new Clipboard(".btn");
+// Initialize clipboard functionality
+new ClipboardJS(".btn");
 
-$("#secretform").submit(function(e) {
-  e.preventDefault();
-  if (this.val === "") return false;
-  const form = new FormData($("#secretform")[0]);
+// DOM helper functions
+function $(selector) {
+  return document.querySelector(selector);
+}
 
-  $.ajax({
-    type: "POST",
-    url: "/secret",
-    processData: false, // Important!
-    contentType: false,
-    cache: false,
-    data: form,
-    success(data) {
-      $(".success-encrypted").css({
-        opacity: 1,
-        pointerEvents: "auto",
-        visibility: "visible"
+function $$(selector) {
+  return document.querySelectorAll(selector);
+}
+
+// CSS manipulation helper
+function setStyles(element, styles) {
+  Object.assign(element.style, styles);
+}
+
+// Form submission handler
+document.addEventListener('DOMContentLoaded', function() {
+  const form = $("#secretform");
+  
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(form);
+    
+    // Make AJAX request using fetch
+    fetch('/secret', {
+      method: 'POST',
+      body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+      // Show success state
+      setStyles($(".success-encrypted"), {
+        opacity: '1',
+        pointerEvents: 'auto',
+        visibility: 'visible'
       });
-      $(".encrypt").css({
-        opacity: 0,
-        pointerEvents: "none",
-        visibility: "hidden"
+      
+      // Hide form elements
+      setStyles($(".encrypt"), {
+        opacity: '0',
+        pointerEvents: 'none',
+        visibility: 'hidden'
       });
-      $(".ttl").css({
-        opacity: 0,
-        pointerEvents: "none",
-        visibility: "hidden"
+      
+      setStyles($(".ttl"), {
+        opacity: '0',
+        pointerEvents: 'none',
+        visibility: 'hidden'
       });
-      $(".input-field").css({
-        opacity: 0,
-        visibility: "hidden",
-        pointerEvents: "none"
+      
+      setStyles($(".input-field"), {
+        opacity: '0',
+        visibility: 'hidden',
+        pointerEvents: 'none'
       });
+      
       showURL(data.token, data.filetoken, data.filename);
-    }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      alert('An error occurred while creating the secret message.');
+    });
   });
 });
 
 function showURL(token, filetoken, filename) {
+  const urlTextarea = $("#url");
+  
   if (filetoken) {
-    $("#url").text(
-      `${window.location.origin}/getmsg?token=${encodeURIComponent(token)}&filetoken=${encodeURIComponent(filetoken)}&filename=${encodeURIComponent(filename)}`
-    );
+    urlTextarea.textContent = 
+      `${window.location.origin}/getmsg?token=${encodeURIComponent(token)}&filetoken=${encodeURIComponent(filetoken)}&filename=${encodeURIComponent(filename)}`;
     return;
   }
-  $("#url").text(`${window.location.origin}/getmsg?token=${encodeURIComponent(token)}`);
+  
+  urlTextarea.textContent = `${window.location.origin}/getmsg?token=${encodeURIComponent(token)}`;
 }
 </script>
 
