@@ -40,7 +40,7 @@ func (v vault) Store(msg string, ttl string) (token string, err error) {
 
 		// validate duration length
 		if d > 168*time.Hour || d == 0*time.Hour {
-			return "", fmt.Errorf("cannot set ttl to infinte or more than 7 days %v", err)
+			return "", fmt.Errorf("cannot set ttl to infinite or more than 7 days %v", err)
 		}
 	}
 
