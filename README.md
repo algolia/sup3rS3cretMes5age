@@ -8,6 +8,18 @@ Read more about the reasoning behind this project in the [relevant blog post](ht
 
 Now using [Let's Encrypt](https://letsencrypt.org/) for simple and free SSL certs!
 
+## Frontend Dependencies
+
+The web interface is built with modern vanilla JavaScript and has minimal external dependencies:
+
+- **ClipboardJS v2.0.11** (8.9KB) - Copy to clipboard functionality
+- **Montserrat Font** (46KB) - Self-hosted typography
+- **Custom CSS** - Application styling
+
+**No external CDNs or tracking:** All dependencies are self-hosted for privacy and security.
+
+**Total JavaScript bundle size:** 8.9KB (previously 98KB with jQuery)
+
 ## Deployment
 
 ### Testing it locally
