@@ -24,7 +24,7 @@ func Serve(cnf conf) {
 		e.AutoTLSManager.Cache = autocert.DirCache("/var/www/.cache")
 	}
 
-	// // Limit to 10 RPS (only human should use this service)
+	// Limit to 10 RPS (only human should use this service)
 	e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(10)))
 	// do not log the /health endpoint
 	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
