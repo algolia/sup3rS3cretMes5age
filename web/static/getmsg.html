@@ -13,16 +13,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link href="/static/montserrat.css" rel="stylesheet">
     <link href="/static/application.css" rel="stylesheet">
-
-
-    <!--Let browser know website is optimized for mobile-->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 </head>
 
 <body>
-    <!--Import jQuery before materialize.js-->
-    <script type="text/javascript" src="/static/jquery-3.7.1.min.js"></script>
-    <script type="text/javascript" src="/static/clipboard-1.7.1.min.js"></script>
+    <script type="text/javascript" src="/static/clipboard-2.0.11.min.js"></script>
     <main class="send">
         <div class="container">
             <h1>Secret Message</h1>
@@ -35,14 +29,10 @@
                 </div>
             
             <div class="input-field" style="display:none">
-
-
                 <textarea  id="textarea1" name="msg" readonly=true class="materialize-textarea" placeholder="Message should appear here"></textarea>
-
             </div>
             <div class="button" style="display:none">
                 <button class="btn clipboard"  type="submit" data-clipboard-target="#textarea1" name="action">Copy to clipboard
-              
             </button>
                 <button class="btn encrypt"  type="submit" name="newMsg" onclick="window.location.href=window.location.origin;">Send a secret message
             </button>
@@ -52,6 +42,24 @@
 
 
     <script type="text/javascript">
+        // DOM helper functions
+        function $(selector) {
+            return document.querySelector(selector);
+        }
+
+        function $$(selector) {
+            return document.querySelectorAll(selector);
+        }
+
+        // Toggle element visibility
+        function toggle(element) {
+            if (element.style.display === 'none' || element.style.display === '') {
+                element.style.display = 'block';
+            } else {
+                element.style.display = 'none';
+            }
+        }
+
         var slider = document.getElementById("myRange");
 
         slider.oninput = function() {
@@ -60,59 +68,82 @@
             }
         }
 
-        //$(document).ready(function () {
         function showSecret() {
-            new Clipboard('.btn');
+            new ClipboardJS('.btn');
 
             let params = (new URL(window.location)).searchParams;
             console.log(window.location.origin + "/secret?token=" + params.get('token') + "&filetoken=" + params.get('filetoken') + "&filename=" + params.get('filename') );
-            $.ajax({
-                type: "GET",
-                url: window.location.origin + "/secret?token=" + params.get('token'),
-                success: function (data) {
-                    console.log('Submission was successful.');
-                    console.log(data);
-                    showMsg(data.msg, params.get('filetoken'), params.get('filename'))
-                },
-                error: function (data) {
-                    console.log('An error occurred.');
-                    console.log(data);
-                    showMsg("Message was already deleted :(")
-                },
+            
+            // Replace jQuery AJAX with fetch
+            fetch(window.location.origin + "/secret?token=" + params.get('token'), {
+                method: 'GET'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Submission was successful.');
+                console.log(data);
+                showMsg(data.msg, params.get('filetoken'), params.get('filename'));
+            })
+            .catch(error => {
+                console.log('An error occurred.');
+                console.log(error);
+                showMsg("Message was already deleted :(");
             });
         };
 
         function showMsg(msg, filetoken, filename) {
-            $('#pbar').hide()
+            // Hide progress bar if it exists
+            const pbar = $('#pbar');
+            if (pbar) {
+                pbar.style.display = 'none';
+            }
 
-            $('#textarea1').text(msg) 
+            // Set message text - use textContent for text, value for textarea
+            const textarea = $('#textarea1');
+            if (textarea) {
+                textarea.value = msg;  // Use .value for textarea, not .textContent
+            }
+            
             if (filetoken) {
-                console.log('filetoken=', filetoken)
-                getSecret(filetoken, filename)
+                console.log('filetoken=', filetoken);
+                getSecret(filetoken, filename);
             }
            
             // Hide slider
-            $('.slidecontainer').toggle();
+            const slideContainer = $('.slidecontainer');
+            if (slideContainer) {
+                slideContainer.style.display = 'none';
+            }
+            
             // Show secret text box
-            $('.input-field').toggle();
+            const inputField = $('.input-field');
+            if (inputField) {
+                inputField.style.display = 'block';
+            }
+            
             // Show copy to clipboard button
-            $('.button').toggle();
+            const buttonDiv = $('.button');
+            if (buttonDiv) {
+                buttonDiv.style.display = 'block';
+            }
+            
             // Reset slider (in case of back button)
             slider.value = 0;
-
         }
 
         function getSecret(token, name) {
             fetch(window.location.origin + "/secret?token=" + token, {
                 method: 'get'
             }).then(function (response) {
-                response.json().then(function (json) {
-                    //decodedMsg = window.atob(json.msg)//console.log("response=", json.msg);
-                    saveData(json.msg, name);
-                });
-
-
-
+                return response.json();
+            }).then(function (json) {
+                //decodedMsg = window.atob(json.msg)//console.log("response=", json.msg);
+                saveData(json.msg, name);
             }).catch(function (err) {
                 console.error(err);
             });
