@@ -27,7 +27,12 @@ ENV \
     SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH \
     SUPERSECRETMESSAGE_VAULT_PREFIX
 
-RUN apk add --no-cache ca-certificates
-
+RUN apk add --no-cache ca-certificates && \
+  rm -rf /var/cache/apk/* && \
+  addgroup -S supersecret && \
+  adduser  -S supersecret -G supersecret && \
+  chown -R supersecret:supersecret /opt/supersecret
+  
+USER supersecret
 
 CMD ["./sup3rS3cretMes5age" ]
