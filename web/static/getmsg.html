@@ -139,9 +139,9 @@
         function getSecret(token, name) {
             fetch(window.location.origin + "/secret?token=" + token, {
                 method: 'get'
-            }).then(function (response) {
-                return response.json();
-            }).then(function (json) {
+            }).then(response => 
+                response.json()
+            ).then(json => {
                 //decodedMsg = window.atob(json.msg)//console.log("response=", json.msg);
                 saveData(json.msg, name);
             }).catch(function (err) {
