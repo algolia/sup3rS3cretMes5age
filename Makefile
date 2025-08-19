@@ -11,14 +11,17 @@ TAG=$(shell git describe --tags --abbrev=0)
 VERSION=$(shell echo "$(TAG)" | sed -e 's/^v//')
 COMMIT=$(shell git rev-parse --short HEAD)
 
+ATTESTATIONS=--provenance=true --sbom=true
+PLATFORMS=--platform linux/amd64,linux/arm64
+
 test:
 	go test ./... -v
 
 image:
-	docker build \
-		--build-arg VERSION=${VERSION} \
-		-t algolia/supersecretmessage:${VERSION} \
-		-t algolia/supersecretmessage:${COMMIT} \
+	docker buildx build $(ATTESTATIONS) $(PLATFORMS) \
+		--build-arg VERSION=$(VERSION) \
+		-t algolia/supersecretmessage:$(VERSION) \
+		-t algolia/supersecretmessage:$(COMMIT) \
 		-t algolia/supersecretmessage:latest \
 		$(DOCKER_OPS) .
 
