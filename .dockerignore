@@ -1,5 +1,10 @@
+.circleci
+CLI.md
+.codacy.yml
 CODEOWNERS
+deploy
+.git
+.gitignore
 LICENSE
 Makefile
 README.md
-deploy
