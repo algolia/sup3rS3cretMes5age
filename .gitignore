@@ -5,4 +5,6 @@ static/.well-known
 *.pem
 *.key
 /sup3rS3cretMes5age
+sup3rs3cret
+sup3rs3cret-*
 .DS_Store
