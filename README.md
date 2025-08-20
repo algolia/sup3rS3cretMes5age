@@ -38,6 +38,14 @@ We recommend deploying the project via **Docker** and a **container orchestratio
 * Host it in a Docker registry ([Docker Hub](https://hub.docker.com/), [AWS ECR](https://aws.amazon.com/ecr/), etc.)
 * Deploy the image (alongside with a standalone Vault server) using a container orchestration tool ([Kubernetes](https://kubernetes.io/), [Docker Swarm](https://docs.docker.com/engine/swarm/), [AWS ECS](https://aws.amazon.com/ecs/), etc.)
 
+#### AWS Deployment
+
+For detailed step-by-step instructions on deploying to AWS, see our comprehensive [AWS Deployment Guide](AWS_DEPLOYMENT.md). The guide covers:
+
+- **ECS with Fargate** (recommended) - Serverless containers with Application Load Balancer
+- **EKS (Kubernetes)** - Using the provided Helm chart on Amazon EKS  
+- **EC2 with Docker** - Simple deployment using Docker Compose
+
 You can read the [configuration examples](#configuration-examples) below.
 
 ### Security notice
@@ -49,7 +57,7 @@ It is interesting to have TLS termination before the container so you don't have
 
 ## Helm
 
-For full documentation for this chart, please see the [README](https://github.com/algolia/sup3rS3cretMes5age/blob/master/deployments/charts/README.md)
+For full documentation for this chart, please see the [README](deploy/charts/README.md)
 
 ## Command Line Usage
 
