@@ -2,7 +2,7 @@ version: '3.2'
 
 services:
   vault:
-    image: hashicorp/vault:latest
+    image: hashicorp/vault:1.20.2
     container_name: vault
     environment:
       VAULT_DEV_ROOT_TOKEN_ID: supersecret
