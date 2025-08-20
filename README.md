@@ -122,6 +122,10 @@ By default, the application runs on **port 8082** in HTTP mode: [http://localhos
 
 ### Production Deployment
 
+The image is available at:
+- **Docker Hub**: `algolia/supersecretmessage:latest`
+- **Platforms**: linux/amd64, linux/arm64
+
 #### Docker Image
 
 Build multi-platform images with SBOM and provenance attestations:
@@ -132,9 +136,15 @@ make image
 # Builds: linux/amd64, linux/arm64 with SBOM and provenance
 ```
 
-The image is available at:
-- **Docker Hub**: `algolia/supersecretmessage:latest`
-- **Platforms**: linux/amd64, linux/arm64
+#### AWS Deployment
+
+For detailed step-by-step instructions on deploying to AWS, see our comprehensive [AWS Deployment Guide](AWS_DEPLOYMENT.md). The guide covers:
+
+- **ECS with Fargate** (recommended) - Serverless containers with Application Load Balancer
+- **EKS (Kubernetes)** - Using the provided Helm chart on Amazon EKS  
+- **EC2 with Docker** - Simple deployment using Docker Compose
+
+You can read the [configuration examples](#configuration-examples) below.
 
 #### Deployment Platforms
 
@@ -194,7 +204,7 @@ helm install supersecret ./deploy/charts/supersecretmessage \
 - App Version: 0.2.5
 - Includes: Deployment, Service, Ingress, HPA, ServiceAccount
 
-For full documentation, see the [Helm Chart README](https://github.com/algolia/sup3rS3cretMes5age/blob/master/deploy/charts/README.md)
+For full documentation, see the [Helm Chart README](deploy/charts/README.md)
 
 ## 📡 API Reference
 
