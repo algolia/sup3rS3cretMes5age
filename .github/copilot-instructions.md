@@ -5,7 +5,7 @@ Always reference these instructions first and fallback to search or bash command
 ## Working Effectively
 
 ### Bootstrap and Dependencies
-- Install Go 1.24+: `go version` must show go1.24 or later
+- Install Go 1.25+: `go version` must show go1.25 or later
 - Install Docker: Required for Vault development server
 - Install CLI tools for testing:
   ```bash
@@ -13,7 +13,7 @@ Always reference these instructions first and fallback to search or bash command
   sudo apt-get update && sudo apt-get install -y curl jq
   
   # Check installations
-  go version    # Must be 1.24+
+  go version    # Must be 1.25+
   docker --version
   curl --version
   jq --version
@@ -157,7 +157,7 @@ web/               # Web assets
 ```go
 module github.com/algolia/sup3rS3cretMes5age
 
-go 1.24
+go 1.25
 
 require (
     github.com/hashicorp/vault v1.16.3
