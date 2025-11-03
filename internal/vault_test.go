@@ -37,7 +37,7 @@ func createTestVault(t *testing.T) (net.Listener, *api.Client) {
 
 func TestStoreAndGet(t *testing.T) {
 	ln, c := createTestVault(t)
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	v := newVault(c.Address(), "secret/test/", c.Token())
 	secret := "my secret"
@@ -51,7 +51,7 @@ func TestStoreAndGet(t *testing.T) {
 
 func TestMsgCanOnlyBeAccessedOnce(t *testing.T) {
 	ln, c := createTestVault(t)
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	v := newVault(c.Address(), "secret/test/", c.Token())
 	secret := "my secret"

@@ -39,7 +39,7 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err)
 		}
-		defer src.Close()
+		defer func() { _ = src.Close() }()
 
 		b, err := io.ReadAll(src)
 		if err != nil {
