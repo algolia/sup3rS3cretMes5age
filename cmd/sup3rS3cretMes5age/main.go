@@ -1,3 +1,5 @@
+// Package main provides the entry point for the sup3rS3cretMes5age application,
+// a secure self-destructing message service using HashiCorp Vault as a backend.
 package main
 
 import (
@@ -8,6 +10,7 @@ import (
 	"github.com/algolia/sup3rS3cretMes5age/internal"
 )
 
+// version holds the application version string, injected at build time via ldflags.
 var version = ""
 
 func main() {
