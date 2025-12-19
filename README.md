@@ -144,7 +144,11 @@ For detailed step-by-step instructions on deploying to AWS, see our comprehensiv
 - **EKS (Kubernetes)** - Using the provided Helm chart on Amazon EKS  
 - **EC2 with Docker** - Simple deployment using Docker Compose
 
-You can read the [configuration examples](#configuration-examples) below.
+```bash
+# Build for multiple architectures
+make image
+# Builds: linux/amd64, linux/arm64 with SBOM and provenance
+```
 
 #### Deployment Platforms
 
