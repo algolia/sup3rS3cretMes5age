@@ -1,3 +1,5 @@
+// Package internal contains the core business logic for the sup3rS3cretMes5age application,
+// including configuration management, HTTP handlers, server setup, and Vault integration.
 package internal
 
 import (
@@ -6,24 +8,46 @@ import (
 	"strings"
 )
 
+// conf holds the application configuration settings loaded from environment variables.
+// It includes HTTP/HTTPS binding addresses, TLS configuration, and Vault storage prefix.
 type conf struct {
-	HttpBindingAddress   string
-	HttpsBindingAddress  string
+	// HttpBindingAddress is the HTTP server binding address (e.g., ":8080").
+	HttpBindingAddress string
+	// HttpsBindingAddress is the HTTPS server binding address (e.g., ":443").
+	HttpsBindingAddress string
+	// HttpsRedirectEnabled determines whether HTTP requests should redirect to HTTPS.
 	HttpsRedirectEnabled bool
-	TLSAutoDomain        string
-	TLSCertFilepath      string
-	TLSCertKeyFilepath   string
-	VaultPrefix          string
+	// TLSAutoDomain is the domain for automatic Let's Encrypt TLS certificate generation.
+	TLSAutoDomain string
+	// TLSCertFilepath is the path to a manual TLS certificate file.
+	TLSCertFilepath string
+	// TLSCertKeyFilepath is the path to a manual TLS certificate key file.
+	TLSCertKeyFilepath string
+	// VaultPrefix is the Vault storage path prefix (defaults to "cubbyhole/").
+	VaultPrefix string
 }
 
-const HttpBindingAddressVarenv = "SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS"
-const HttpsBindingAddressVarenv = "SUPERSECRETMESSAGE_HTTPS_BINDING_ADDRESS"
-const HttpsRedirectEnabledVarenv = "SUPERSECRETMESSAGE_HTTPS_REDIRECT_ENABLED"
-const TLSAutoDomainVarenv = "SUPERSECRETMESSAGE_TLS_AUTO_DOMAIN"
-const TLSCertFilepathVarenv = "SUPERSECRETMESSAGE_TLS_CERT_FILEPATH"
-const TLSCertKeyFilepathVarenv = "SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH"
-const VaultPrefixenv = "SUPERSECRETMESSAGE_VAULT_PREFIX"
+// Environment variable names for application configuration.
+const (
+	// HttpBindingAddressVarenv is the environment variable for HTTP binding address.
+	HttpBindingAddressVarenv = "SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS"
+	// HttpsBindingAddressVarenv is the environment variable for HTTPS binding address.
+	HttpsBindingAddressVarenv = "SUPERSECRETMESSAGE_HTTPS_BINDING_ADDRESS"
+	// HttpsRedirectEnabledVarenv is the environment variable to enable HTTPS redirect.
+	HttpsRedirectEnabledVarenv = "SUPERSECRETMESSAGE_HTTPS_REDIRECT_ENABLED"
+	// TLSAutoDomainVarenv is the environment variable for automatic TLS domain.
+	TLSAutoDomainVarenv = "SUPERSECRETMESSAGE_TLS_AUTO_DOMAIN"
+	// TLSCertFilepathVarenv is the environment variable for manual TLS certificate path.
+	TLSCertFilepathVarenv = "SUPERSECRETMESSAGE_TLS_CERT_FILEPATH"
+	// TLSCertKeyFilepathVarenv is the environment variable for manual TLS key path.
+	TLSCertKeyFilepathVarenv = "SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH"
+	// VaultPrefixenv is the environment variable for Vault storage prefix.
+	VaultPrefixenv = "SUPERSECRETMESSAGE_VAULT_PREFIX"
+)
 
+// LoadConfig loads and validates application configuration from environment variables.
+// It validates TLS configuration mutual exclusivity, ensures required bindings are set,
+// and sets default values where appropriate. Exits with fatal error on invalid configuration.
 func LoadConfig() conf {
 	var cnf conf
 
