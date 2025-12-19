@@ -10,6 +10,11 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
+// Serve starts the HTTP/HTTPS server with the provided configuration.
+// It sets up the Echo web framework with middleware (rate limiting, logging, security),
+// configures TLS (automatic via Let's Encrypt or manual), and registers all HTTP routes.
+// Vault connection details are read from VAULT_ADDR and VAULT_TOKEN environment variables.
+// The server runs until terminated or encounters a fatal error.
 func Serve(cnf conf) {
 	// Vault address and token are taken from VAULT_ADDR and VAULT_TOKEN environment variables
 	handlers := newSecretHandlers(newVault("", cnf.VaultPrefix, ""))
