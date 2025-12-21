@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v4"
 )
@@ -37,16 +38,42 @@ func newSecretHandlers(s SecretMsgStorer) *SecretHandlers {
 	return &SecretHandlers{s}
 }
 
+// isValidTTL checks if the provided TTL string is a valid duration between 1 minute and 7 days.
+func isValidTTL(ttl string) bool {
+	// Verify duration
+	d, err := time.ParseDuration(ttl)
+	if err != nil {
+		return false
+	}
+
+	// validate duration length (between 1 minute and 7 days)
+	if d < 1*time.Minute || d > 168*time.Hour {
+		return false
+	}
+	return true
+}
+
 // CreateMsgHandler handles POST requests to create a new self-destructing secret message.
 // It accepts form data with 'msg' (required), 'ttl' (optional time-to-live), and 'file' (optional file upload).
 // Files are base64 encoded before storage. Maximum file size is 50MB (enforced by middleware).
 // Returns a JSON response with token(s) for retrieving the message and/or file.
 func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
-	var tr TokenResponse
+
+	msg := ctx.FormValue("msg")
+	if msg == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "message is required")
+	}
+	if len(msg) > 1*1024*1024 { // 1MB limit for text
+		return echo.NewHTTPError(http.StatusBadRequest, "message too large")
+	}
 
 	// Get TTL (if any)
 	ttl := ctx.FormValue("ttl")
+	if ttl != "" && !isValidTTL(ttl) {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid TTL format")
+	}
 
+	var tr TokenResponse
 	// Upload file if any
 	file, err := ctx.FormFile("file")
 	if err == nil {
@@ -74,7 +101,6 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 	}
 
 	// Handle the secret message
-	msg := ctx.FormValue("msg")
 	tr.Token, err = s.store.Store(msg, ttl)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err)

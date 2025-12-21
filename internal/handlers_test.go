@@ -85,3 +85,28 @@ func TestRedirectHandler(t *testing.T) {
 	assert.Equal(t, http.StatusPermanentRedirect, rec.Code)
 	assert.Equal(t, "/msg", rec.Result().Header.Get("Location"))
 }
+
+func TestIsValidTTL(t *testing.T) {
+	tests := []struct {
+		ttl   string
+		valid bool
+	}{
+		{"1h", true},
+		{"30m", true},
+		{"2h30m", true},
+		{"48h", true},
+		{"168h", true},     // 7 days - maximum
+		{"169h", false},    // exceeds maximum
+		{"30s", false},     // below minimum
+		{"0h", false},      // zero duration
+		{"", false},        // empty
+		{"invalid", false}, // invalid format
+		{"1d", false},      // 'd' not supported by Go
+		{"-1h", false},     // negative duration
+	}
+
+	for _, tt := range tests {
+		result := isValidTTL(tt.ttl)
+		assert.Equal(t, result, tt.valid)
+	}
+}
