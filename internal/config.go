@@ -25,6 +25,8 @@ type conf struct {
 	TLSCertKeyFilepath string
 	// VaultPrefix is the Vault storage path prefix (defaults to "cubbyhole/").
 	VaultPrefix string
+	// AllowedOrigins is the list of allowed CORS origins.
+	AllowedOrigins []string
 }
 
 // Environment variable names for application configuration.
@@ -43,6 +45,8 @@ const (
 	TLSCertKeyFilepathVarenv = "SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH"
 	// VaultPrefixenv is the environment variable for Vault storage prefix.
 	VaultPrefixenv = "SUPERSECRETMESSAGE_VAULT_PREFIX"
+	// AllowedOriginsVarenv is the environment variable for allowed CORS origins.
+	AllowedOriginsVarenv = "SUPERSECRETMESSAGE_ALLOWED_ORIGINS"
 )
 
 // LoadConfig loads and validates application configuration from environment variables.
@@ -58,6 +62,7 @@ func LoadConfig() conf {
 	cnf.TLSCertFilepath = os.Getenv(TLSCertFilepathVarenv)
 	cnf.TLSCertKeyFilepath = os.Getenv(TLSCertKeyFilepathVarenv)
 	cnf.VaultPrefix = os.Getenv(VaultPrefixenv)
+	cnf.AllowedOrigins = strings.Split(os.Getenv(AllowedOriginsVarenv), ",")
 
 	if cnf.TLSAutoDomain != "" && (cnf.TLSCertFilepath != "" || cnf.TLSCertKeyFilepath != "") {
 		log.Fatalf("Auto TLS (%s) is mutually exclusive with manual TLS (%s and %s)", TLSAutoDomainVarenv,
@@ -96,6 +101,7 @@ func LoadConfig() conf {
 	log.Println("[INFO] TLS Cert Filepath:", cnf.TLSCertFilepath)
 	log.Println("[INFO] TLS Cert Key Filepath:", cnf.TLSCertKeyFilepath)
 	log.Println("[INFO] Vault prefix:", cnf.VaultPrefix)
+	log.Println("[INFO] Allowed Origins:", cnf.AllowedOrigins)
 
 	return cnf
 }

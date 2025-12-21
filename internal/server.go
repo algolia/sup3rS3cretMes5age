@@ -29,6 +29,13 @@ func Serve(cnf conf) {
 		e.AutoTLSManager.Cache = autocert.DirCache("/var/www/.cache")
 	}
 
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: cnf.AllowedOrigins,
+		AllowMethods: []string{http.MethodGet, http.MethodPost},
+		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType},
+		MaxAge:       86400,
+	}))
+
 	// Limit to 10 RPS (only human should use this service)
 	e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(10)))
 	// do not log the /health endpoint
