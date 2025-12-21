@@ -3,7 +3,6 @@ package internal
 import (
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/hashicorp/vault/api"
 )
@@ -46,17 +45,6 @@ func (v vault) Store(msg string, ttl string) (token string, err error) {
 	// Default TTL
 	if ttl == "" {
 		ttl = "48h"
-	} else {
-		// Verify duration
-		d, err := time.ParseDuration(ttl)
-		if err != nil {
-			return "", fmt.Errorf("cannot parse duration %v", err)
-		}
-
-		// validate duration length
-		if d > 168*time.Hour || d == 0*time.Hour {
-			return "", fmt.Errorf("cannot set ttl to infinite or more than 7 days %v", err)
-		}
 	}
 
 	t, err := v.createOneTimeToken(ttl)
