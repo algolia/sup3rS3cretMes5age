@@ -62,8 +62,18 @@ func Serve(cnf conf) {
 			return c.Path() == "/health"
 		},
 	}))
+
+	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
+		XSSProtection:         "1; mode=block",
+		ContentTypeNosniff:    "nosniff",
+		XFrameOptions:         "DENY",
+		HSTSMaxAge:            31536000,
+		HSTSPreloadEnabled:    true,
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'",
+	}))
+
 	e.Use(middleware.BodyLimit("50M"))
-	e.Use(middleware.Secure())
+
 	e.Use(middleware.Recover())
 
 	e.GET("/", redirectHandler)
