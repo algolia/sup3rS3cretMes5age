@@ -3,6 +3,7 @@ package internal
 import (
 	"crypto/tls"
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -36,8 +37,25 @@ func Serve(cnf conf) {
 		MaxAge:       86400,
 	}))
 
-	// Limit to 10 RPS (only human should use this service)
-	e.Use(middleware.RateLimiter(middleware.NewRateLimiterMemoryStore(10)))
+	// Limit to 5 RPS (burst 10) (only human should use this service)
+	e.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(
+			middleware.RateLimiterMemoryStoreConfig{
+				Rate:      5,
+				Burst:     10,
+				ExpiresIn: 1 * time.Minute,
+			},
+		),
+		IdentifierExtractor: func(ctx echo.Context) (string, error) {
+			return ctx.RealIP(), nil
+		},
+		DenyHandler: func(ctx echo.Context, identifier string, err error) error {
+			return ctx.JSON(http.StatusTooManyRequests, map[string]string{
+				"error": "rate limit exceeded",
+			})
+		},
+	}))
+
 	// do not log the /health endpoint
 	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
 		Skipper: func(c echo.Context) bool {
