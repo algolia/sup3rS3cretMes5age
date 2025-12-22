@@ -122,8 +122,12 @@ func Serve(cnf conf) {
 		//HostPolicy: autocert.HostWhitelist("<DOMAIN>"),
 	}
 	s := http.Server{
-		Addr:    ":443",
-		Handler: e, // set Echo as handler
+		Addr:           ":443",
+		Handler:        e, // set Echo as handler
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		IdleTimeout:    120 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1MB
 		TLSConfig: &tls.Config{
 			//Certificates: nil, // <-- s.ListenAndServeTLS will populate this field
 			GetCertificate:   autoTLSManager.GetCertificate,
@@ -145,7 +149,6 @@ func Serve(cnf conf) {
 			},
 			PreferServerCipherSuites: true,
 		},
-		//ReadTimeout: 30 * time.Second, // use custom timeouts
 	}
 
 	if err := s.ListenAndServeTLS("", ""); err != http.ErrServerClosed {
