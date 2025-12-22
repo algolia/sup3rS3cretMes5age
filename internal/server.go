@@ -11,23 +11,13 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-// Serve starts the HTTP/HTTPS server with the provided configuration.
-// It sets up the Echo web framework with middleware (rate limiting, logging, security),
-// configures TLS (automatic via Let's Encrypt or manual), and registers all HTTP routes.
-// Vault connection details are read from VAULT_ADDR and VAULT_TOKEN environment variables.
-// The server runs until terminated or encounters a fatal error.
-func Serve(cnf conf) {
-	// Vault address and token are taken from VAULT_ADDR and VAULT_TOKEN environment variables
-	handlers := newSecretHandlers(newVault("", cnf.VaultPrefix, ""))
-	e := echo.New()
-
+// setupMiddlewares configures Echo's middleware stack with security, rate limiting, and logging.
+// It applies HTTPS redirect (if enabled), CORS policy, rate limiting (5 RPS), request logging,
+// security headers (CSP, XSS protection, HSTS), body size limits (50MB), and panic recovery.
+// Middleware is applied in order: pre-routing (HTTPS redirect), then request-level middleware.
+func setupMiddlewares(e *echo.Echo, cnf conf) {
 	if cnf.HttpsRedirectEnabled {
 		e.Pre(middleware.HTTPSRedirect())
-	}
-
-	if cnf.TLSAutoDomain != "" {
-		e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(cnf.TLSAutoDomain)
-		e.AutoTLSManager.Cache = autocert.DirCache("/var/www/.cache")
 	}
 
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
@@ -75,16 +65,45 @@ func Serve(cnf conf) {
 	e.Use(middleware.BodyLimit("50M"))
 
 	e.Use(middleware.Recover())
+}
 
+// setupRoutes registers all HTTP endpoints and static file routes.
+// API endpoints: GET/POST /secret (secret management), ANY /health (health check), GET / (redirect).
+// Static routes: /msg and /getmsg (HTML pages), /static (assets), /robots.txt (SEO).
+func setupRoutes(e *echo.Echo, handlers *SecretHandlers) {
 	e.GET("/", redirectHandler)
 	e.File("/robots.txt", "static/robots.txt")
 
 	e.Any("/health", healthHandler)
+
 	e.GET("/secret", handlers.GetMsgHandler)
 	e.POST("/secret", handlers.CreateMsgHandler)
+
 	e.File("/msg", "static/index.html")
+
 	e.File("/getmsg", "static/getmsg.html")
+
 	e.Static("/static", "static")
+}
+
+// Serve starts the HTTP/HTTPS server with the provided configuration.
+// It sets up the Echo web framework with middleware (rate limiting, logging, security),
+// configures TLS (automatic via Let's Encrypt or manual), and registers all HTTP routes.
+// Vault connection details are read from VAULT_ADDR and VAULT_TOKEN environment variables.
+// The server runs until terminated or encounters a fatal error.
+func Serve(cnf conf) {
+	// Vault address and token are taken from VAULT_ADDR and VAULT_TOKEN environment variables
+	handlers := newSecretHandlers(newVault("", cnf.VaultPrefix, ""))
+	e := echo.New()
+
+	if cnf.TLSAutoDomain != "" {
+		e.AutoTLSManager.HostPolicy = autocert.HostWhitelist(cnf.TLSAutoDomain)
+		e.AutoTLSManager.Cache = autocert.DirCache("/var/www/.cache")
+	}
+
+	setupMiddlewares(e, cnf)
+
+	setupRoutes(e, handlers)
 
 	if cnf.HttpBindingAddress != "" {
 		if cnf.HttpsBindingAddress != "" {
@@ -128,6 +147,7 @@ func Serve(cnf conf) {
 		},
 		//ReadTimeout: 30 * time.Second, // use custom timeouts
 	}
+
 	if err := s.ListenAndServeTLS("", ""); err != http.ErrServerClosed {
 		e.Logger.Fatal(err)
 	}
