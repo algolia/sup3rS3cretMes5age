@@ -2,8 +2,11 @@ package internal
 
 import (
 	"encoding/base64"
+	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -38,6 +41,20 @@ func newSecretHandlers(s SecretMsgStorer) *SecretHandlers {
 	return &SecretHandlers{s}
 }
 
+// validateMsg checks if the provided message is non-empty and within size limits.
+func validateMsg(msg string) error {
+	if msg == "" {
+		return fmt.Errorf("message is required")
+	}
+
+	// 1MB limit for text
+	if len(msg) > 1*1024*1024 {
+		return fmt.Errorf("message too large")
+	}
+
+	return nil
+}
+
 // isValidTTL checks if the provided TTL string is a valid duration between 1 minute and 7 days.
 func isValidTTL(ttl string) bool {
 	// Verify duration
@@ -53,6 +70,21 @@ func isValidTTL(ttl string) bool {
 	return true
 }
 
+// validateFileUpload checks the uploaded file for size and filename validity.
+func validateFileUpload(file *multipart.FileHeader) error {
+	// Check file size
+	if file.Size > 50*1024*1024 {
+		return fmt.Errorf("file too large")
+	}
+
+	// Check filename for path traversal
+	if strings.Contains(file.Filename, "..") || strings.Contains(file.Filename, "/") {
+		return fmt.Errorf("invalid filename")
+	}
+
+	return nil
+}
+
 // CreateMsgHandler handles POST requests to create a new self-destructing secret message.
 // It accepts form data with 'msg' (required), 'ttl' (optional time-to-live), and 'file' (optional file upload).
 // Files are base64 encoded before storage. Maximum file size is 50MB (enforced by middleware).
@@ -60,11 +92,8 @@ func isValidTTL(ttl string) bool {
 func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 
 	msg := ctx.FormValue("msg")
-	if msg == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "message is required")
-	}
-	if len(msg) > 1*1024*1024 { // 1MB limit for text
-		return echo.NewHTTPError(http.StatusBadRequest, "message too large")
+	if err := validateMsg(msg); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	// Get TTL (if any)
@@ -77,6 +106,10 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 	// Upload file if any
 	file, err := ctx.FormFile("file")
 	if err == nil {
+		if err := validateFileUpload(file); err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		}
+
 		src, err := file.Open()
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err)
