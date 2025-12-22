@@ -136,7 +136,8 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 	// Handle the secret message
 	tr.Token, err = s.store.Store(msg, ttl)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err)
+		ctx.Logger().Errorf("Failed to store secret: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to store secret")
 	}
 
 	return ctx.JSON(http.StatusOK, tr)
@@ -148,7 +149,8 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 func (s SecretHandlers) GetMsgHandler(ctx echo.Context) error {
 	m, err := s.store.Get(ctx.QueryParam("token"))
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err)
+		ctx.Logger().Errorf("Failed to retrieve secret: %v", err)
+		return echo.NewHTTPError(http.StatusNotFound, "secret not found or already consumed")
 	}
 	r := &MsgResponse{
 		Msg: m,

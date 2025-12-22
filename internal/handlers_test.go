@@ -57,7 +57,7 @@ func TestGetMsgHandlerError(t *testing.T) {
 	assert.Error(t, err)
 	if assert.IsType(t, &echo.HTTPError{}, err) {
 		v, _ := err.(*echo.HTTPError)
-		assert.Equal(t, http.StatusInternalServerError, v.Code)
+		assert.Equal(t, http.StatusNotFound, v.Code)
 	}
 }
 
