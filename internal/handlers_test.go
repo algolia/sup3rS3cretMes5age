@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"mime/multipart"
 	"net/http"
@@ -137,36 +139,6 @@ func TestValidateMsg(t *testing.T) {
 	}
 }
 
-func TestValidateFileUpload(t *testing.T) {
-	tests := []struct {
-		name     string
-		filename string
-		size     int64
-		wantErr  bool
-	}{
-		{"valid file", "test.pdf", 1000, false},
-		{"file too large", "large.pdf", 51 * 1024 * 1024, true},
-		{"path traversal dots", "../etc/passwd", 100, true},
-		{"path traversal slash", "path/to/file", 100, true},
-		{"at size limit", "limit.pdf", 50 * 1024 * 1024, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			file := &multipart.FileHeader{
-				Filename: tt.filename,
-				Size:     tt.size,
-			}
-			err := validateFileUpload(file)
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
 func TestCreateMsgHandler(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -207,6 +179,150 @@ func TestCreateMsgHandler(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, http.StatusOK, rec.Code)
 				assert.Equal(t, tt.msg, s.lastMsg)
+			}
+		})
+	}
+}
+
+func TestCreateMsgHandlerWithFile(t *testing.T) {
+	tests := []struct {
+		name         string
+		msg          string
+		ttl          string
+		fileName     string
+		fileContent  []byte
+		expectError  bool
+		expectedCode int
+		checkToken   bool
+		checkFile    bool
+	}{
+		{
+			name:         "valid message with file",
+			msg:          "secret message",
+			ttl:          "1h",
+			fileName:     "test.txt",
+			fileContent:  []byte("file content"),
+			expectError:  false,
+			expectedCode: http.StatusOK,
+			checkToken:   true,
+			checkFile:    true,
+		},
+		{
+			name:         "valid message with file, no TTL",
+			msg:          "secret message",
+			ttl:          "",
+			fileName:     "document.pdf",
+			fileContent:  []byte("PDF content here"),
+			expectError:  false,
+			expectedCode: http.StatusOK,
+			checkToken:   true,
+			checkFile:    true,
+		},
+		{
+			name:         "empty file should not create file token",
+			msg:          "secret message",
+			ttl:          "1h",
+			fileName:     "empty.txt",
+			fileContent:  []byte{},
+			expectError:  false,
+			expectedCode: http.StatusOK,
+			checkToken:   true,
+			checkFile:    false,
+		},
+		{
+			name:         "file with path traversal",
+			msg:          "secret message",
+			ttl:          "1h",
+			fileName:     "../etc/passwd",
+			fileContent:  []byte("malicious"),
+			expectError:  true,
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:         "file with slash in name",
+			msg:          "secret message",
+			ttl:          "1h",
+			fileName:     "path/to/file.txt",
+			fileContent:  []byte("content"),
+			expectError:  true,
+			expectedCode: http.StatusBadRequest,
+		},
+		{
+			name:         "file too big",
+			msg:          "secret message",
+			ttl:          "1h",
+			fileName:     "bigfile.txt",
+			fileContent:  make([]byte, 50*1024*1024+1), // 50MB + 1 byte
+			expectError:  true,
+			expectedCode: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create multipart form
+			body := &bytes.Buffer{}
+			writer := multipart.NewWriter(body)
+
+			// Add message field
+			err := writer.WriteField("msg", tt.msg)
+			assert.NoError(t, err)
+
+			// Add TTL field if provided
+			if tt.ttl != "" {
+				err = writer.WriteField("ttl", tt.ttl)
+				assert.NoError(t, err)
+			}
+
+			// Add file field
+			part, err := writer.CreateFormFile("file", tt.fileName)
+			assert.NoError(t, err)
+			_, err = part.Write(tt.fileContent)
+			assert.NoError(t, err)
+
+			err = writer.Close()
+			assert.NoError(t, err)
+
+			// Create request
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodPost, "/secret", body)
+			req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			// Create fake store that returns tokens
+			s := &FakeSecretMsgStorer{token: "msg-token-123"}
+			h := newSecretHandlers(s)
+
+			// Execute handler
+			handlerErr := h.CreateMsgHandler(c)
+
+			if tt.expectError {
+				assert.Error(t, handlerErr)
+				if httpErr, ok := handlerErr.(*echo.HTTPError); ok {
+					assert.Equal(t, tt.expectedCode, httpErr.Code)
+				}
+			} else {
+				assert.NoError(t, handlerErr)
+				assert.Equal(t, tt.expectedCode, rec.Code)
+
+				// Parse response
+				var response TokenResponse
+				err := json.Unmarshal(rec.Body.Bytes(), &response)
+				assert.NoError(t, err)
+
+				if tt.checkToken {
+					assert.Equal(t, "msg-token-123", response.Token)
+					assert.Equal(t, tt.msg, s.lastMsg)
+				}
+
+				if tt.checkFile {
+					assert.NotEmpty(t, response.FileToken)
+					assert.Equal(t, tt.fileName, response.FileName)
+				} else {
+					assert.Empty(t, response.FileToken)
+					assert.Empty(t, response.FileName)
+				}
 			}
 		})
 	}
