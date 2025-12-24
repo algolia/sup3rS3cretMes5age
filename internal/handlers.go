@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"strings"
@@ -72,13 +73,24 @@ func isValidTTL(ttl string) bool {
 
 // validateFileUpload checks the uploaded file for size and filename validity.
 func validateFileUpload(file *multipart.FileHeader) error {
+	// Parse Content-Disposition to extract filename
+	mediatype, params, err := mime.ParseMediaType(file.Header.Get("Content-Disposition"))
+	if mediatype != "form-data" || err != nil {
+		return fmt.Errorf("invalid file upload")
+	}
+
 	// Check file size
 	if file.Size > 50*1024*1024 {
 		return fmt.Errorf("file too large")
 	}
 
 	// Check filename for path traversal
-	if strings.Contains(file.Filename, "..") || strings.Contains(file.Filename, "/") {
+	if strings.Contains(params["filename"], "..") ||
+		strings.Contains(params["filename"], "/") ||
+		strings.Contains(params["filename"], "\\") ||
+		strings.Contains(file.Filename, "..") ||
+		strings.Contains(file.Filename, "/") ||
+		strings.Contains(file.Filename, "\\") {
 		return fmt.Errorf("invalid filename")
 	}
 
