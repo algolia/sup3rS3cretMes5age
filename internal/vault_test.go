@@ -64,3 +64,10 @@ func TestMsgCanOnlyBeAccessedOnce(t *testing.T) {
 		assert.Error(t, err)
 	}
 }
+
+func TestStoreWithInvalidAddress(t *testing.T) {
+	v := newVault("http://invalid:9999", "secret/", "fake-token")
+	_, err := v.Store("msg", "1h")
+
+	assert.Error(t, err)
+}
