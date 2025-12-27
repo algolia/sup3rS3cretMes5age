@@ -32,6 +32,10 @@ slider.oninput = function() {
     }
 }
 
+document.querySelector('.encrypt[name="newMsg"]').addEventListener('click', function() {
+    window.location.href = window.location.origin;
+});
+
 function showSecret() {
     new ClipboardJS('.btn');
 
