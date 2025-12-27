@@ -27,11 +27,11 @@ type vault struct {
 	token string
 }
 
-// newVault creates a new vault client and starts a background goroutine for token renewal.
+// NewVault creates a new vault client and starts a background goroutine for token renewal.
 // If address or token are empty, they will be read from VAULT_ADDR and VAULT_TOKEN
 // environment variables respectively. The prefix determines the Vault storage path.
-func newVault(address string, prefix string, token string) vault {
-	v := vault{address, prefix, token}
+func NewVault(address string, prefix string, token string) *vault {
+	v := &vault{address, prefix, token}
 
 	go v.newVaultClientToRenewToken()
 	return v

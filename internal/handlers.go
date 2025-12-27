@@ -37,8 +37,8 @@ type SecretHandlers struct {
 	store SecretMsgStorer
 }
 
-// newSecretHandlers creates a new SecretHandlers instance with the provided storage backend.
-func newSecretHandlers(s SecretMsgStorer) *SecretHandlers {
+// NewSecretHandlers creates a new SecretHandlers instance with the provided storage backend.
+func NewSecretHandlers(s SecretMsgStorer) *SecretHandlers {
 	return &SecretHandlers{s}
 }
 

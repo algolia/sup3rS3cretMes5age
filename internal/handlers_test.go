@@ -40,7 +40,7 @@ func TestGetMsgHandlerSuccess(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	s := &FakeSecretMsgStorer{msg: "secret"}
-	h := newSecretHandlers(s)
+	h := NewSecretHandlers(s)
 	err := h.GetMsgHandler(c)
 
 	assert.NoError(t, err)
@@ -56,7 +56,7 @@ func TestGetMsgHandlerError(t *testing.T) {
 	c := e.NewContext(req, rec)
 
 	s := &FakeSecretMsgStorer{msg: "secret", err: errors.New("expired")}
-	h := newSecretHandlers(s)
+	h := NewSecretHandlers(s)
 	err := h.GetMsgHandler(c)
 
 	assert.Error(t, err)
@@ -166,7 +166,7 @@ func TestCreateMsgHandler(t *testing.T) {
 			c := e.NewContext(req, rec)
 
 			s := &FakeSecretMsgStorer{token: "testtoken"}
-			h := newSecretHandlers(s)
+			h := NewSecretHandlers(s)
 			err := h.CreateMsgHandler(c)
 
 			if tt.errMessage != "" {
@@ -292,7 +292,7 @@ func TestCreateMsgHandlerWithFile(t *testing.T) {
 
 			// Create fake store that returns tokens
 			s := &FakeSecretMsgStorer{token: "msg-token-123"}
-			h := newSecretHandlers(s)
+			h := NewSecretHandlers(s)
 
 			// Execute handler
 			handlerErr := h.CreateMsgHandler(c)
