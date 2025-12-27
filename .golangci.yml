@@ -1,0 +1,6 @@
+# Config format version
+version: 2
+
+run:
+  concurrency: 2
+  timeout: 5m
