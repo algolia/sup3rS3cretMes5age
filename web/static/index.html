@@ -8,6 +8,7 @@
     <link rel="manifest" href="/static/icons/manifest.json">
     <link rel="mask-icon" href="/static/icons/safari-pinned-tab.svg" color="#5bbad5">
     <meta name="theme-color" content="#ffffff">
+    <meta name="description" content="Send self-destructing one-time secret messages securely. Messages are automatically deleted after first read.">
     <!--Let browser know website is optimized for mobile-->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link href="/static/montserrat.css" rel="stylesheet">
@@ -15,7 +16,7 @@
     <meta charset="UTF-8">
     <!-- Facebook/Slack Meta Tags-->
     <meta property="og:title" content="Self Destructing Secure Message" />
-    <meta property="og:image" content="https://github.com/algolia/sup3rS3cretMes5age/blob/ai-doc-enhancement/web/static/icons/android-chrome-512x512.png" />
+    <meta property="og:image" content="/static/icons/android-chrome-512x512.png" />
     <meta property="og:site_name" content="sup3rS3cretMes5age" />
     <meta property="og:description" content="A self destructing one time secure msg service, have fun, stay secure!" />
     <meta property="og:type" content="website">
@@ -27,7 +28,7 @@
         <p class="subtitle">Send a secret one-time read only message</p>
         <form id="secretform" action="/no-internet" method="POST" enctype="multipart/form-data">
           <div class="input-field">
-            Upload Secret File: <input id='file-input' type="file" name="file" size=25></br>
+            Upload Secret File: <input id='file-input' type="file" name="file" size=25><br>
             <textarea id="textarea1" name="msg" placeholder="Paste your message here" required></textarea>
           </div>
           <div class="ttl">
@@ -57,12 +58,12 @@
     </main>
     <footer>
       <div class="footer">
-        <a href="https://github.com/algolia/sup3rS3cretMes5age" target="_blank">
+        <a href="https://github.com/algolia/sup3rS3cretMes5age" target="_blank" rel="noopener noreferrer">
           <img src="/static/icons/github.png" alt="sup3rS3cretMes5age GitHub repository">
         </a>
       </div>
     </footer>
+    <script type="text/javascript" src="/static/clipboard-2.0.11.min.js"></script>
+    <script type="text/javascript" src="/static/index.js"></script>
   </body>
-  <script type="text/javascript" src="/static/clipboard-2.0.11.min.js"></script>
-  <script type="text/javascript" src="/static/index.js"></script>
 </html>
