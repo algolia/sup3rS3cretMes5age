@@ -39,7 +39,7 @@ func TestStoreAndGet(t *testing.T) {
 	ln, c := createTestVault(t)
 	defer func() { _ = ln.Close() }()
 
-	v := newVault(c.Address(), "secret/test/", c.Token())
+	v := NewVault(c.Address(), "secret/test/", c.Token())
 	secret := "my secret"
 	token, err := v.Store(secret, "")
 	if assert.NoError(t, err) {
@@ -53,7 +53,7 @@ func TestMsgCanOnlyBeAccessedOnce(t *testing.T) {
 	ln, c := createTestVault(t)
 	defer func() { _ = ln.Close() }()
 
-	v := newVault(c.Address(), "secret/test/", c.Token())
+	v := NewVault(c.Address(), "secret/test/", c.Token())
 	secret := "my secret"
 	token, err := v.Store(secret, "")
 	if assert.NoError(t, err) {
@@ -66,7 +66,7 @@ func TestMsgCanOnlyBeAccessedOnce(t *testing.T) {
 }
 
 func TestStoreWithInvalidAddress(t *testing.T) {
-	v := newVault("http://invalid:9999", "secret/", "fake-token")
+	v := NewVault("http://invalid:9999", "secret/", "fake-token")
 	_, err := v.Store("msg", "1h")
 
 	assert.Error(t, err)

@@ -1,53 +1,217 @@
 package internal
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/crypto/acme/autocert"
 )
 
-func TestSetupRoutes(t *testing.T) {
-
-	/*
-		expectRoutes := []*echo.Route{
-			*echo.Route{Method: echo.GET, Path: "/"},
-			*echo.Route{Method: echo.POST, Path: "/"},
-			*echo.Route{Method: echo.GET, Path: "/msg", Name:"},
-			*echo.Route{Method: echo.POST, Path: "/"},
-		}
-	*/
-	e := echo.New()
-	handlers := newSecretHandlers(&FakeSecretMsgStorer{})
-
-	setupRoutes(e, handlers)
-
-	// Verify routes are registered
-	routes := e.Routes()
-	if assert.NotEmpty(t, routes) {
-		// There should be 18 routes registered:
-		// GET / (redirect)
-		// GET /robots.txt
-		// ANY /health (11)
-		// GET /secret
-		// POST /secret
-		// GET /msg
-		// GET /getmsg
-		// GET /static*
-		assert.Equal(t, 18, len(routes))
-	}
-}
-
-func TestSetupMiddlewares(t *testing.T) {
-	e := echo.New()
+func TestNewServer(t *testing.T) {
 	cnf := conf{
 		HttpBindingAddress: ":8080",
 		VaultPrefix:        "cubbyhole/",
 		AllowedOrigins:     []string{"*"},
 	}
+	handlers := NewSecretHandlers(&FakeSecretMsgStorer{})
 
-	setupMiddlewares(e, cnf)
+	server := NewServer(cnf, handlers)
 
-	// Smoke test - just verify it doesn't panic
-	assert.NotNil(t, e)
+	assert.NotNil(t, server)
+	assert.NotNil(t, server.echo)
+	assert.NotNil(t, server.handlers)
+	assert.Equal(t, cnf.HttpBindingAddress, server.config.HttpBindingAddress)
+}
+
+func TestServerHandler(t *testing.T) {
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+		AllowedOrigins:     []string{"*"},
+	}
+	handlers := NewSecretHandlers(&FakeSecretMsgStorer{})
+	server := NewServer(cnf, handlers)
+
+	// Test health endpoint
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	server.handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "OK", rec.Body.String())
+}
+
+func TestServerRoutesRegistered(t *testing.T) {
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+		AllowedOrigins:     []string{"*"},
+	}
+	handlers := NewSecretHandlers(&FakeSecretMsgStorer{})
+	server := NewServer(cnf, handlers)
+
+	routes := server.echo.Routes()
+	assert.NotEmpty(t, routes)
+
+	// Verify key routes exist
+	routeMap := make(map[string]bool)
+	for _, route := range routes {
+		key := route.Method + " " + route.Path
+		routeMap[key] = true
+	}
+
+	assert.True(t, routeMap["POST /secret"], "POST /secret should be registered")
+	assert.True(t, routeMap["GET /secret"], "GET /secret should be registered")
+	assert.True(t, routeMap["GET /health"] || routeMap["POST /health"], "/health should be registered")
+	assert.True(t, routeMap["GET /"], "GET / should be registered")
+}
+
+func TestServerWithMiddlewares(t *testing.T) {
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+		AllowedOrigins:     []string{"http://localhost:3000"},
+	}
+	handlers := NewSecretHandlers(&FakeSecretMsgStorer{})
+	server := NewServer(cnf, handlers)
+
+	// Test CORS middleware
+	req := httptest.NewRequest(http.MethodOptions, "/secret", nil)
+	req.Header.Set("Origin", "http://localhost:3000")
+	req.Header.Set("Access-Control-Request-Method", "POST")
+	rec := httptest.NewRecorder()
+	server.handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, "http://localhost:3000", rec.Header().Get("Access-Control-Allow-Origin"))
+}
+
+func TestServerSecurityHeaders(t *testing.T) {
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+		AllowedOrigins:     []string{"*"},
+	}
+	handlers := NewSecretHandlers(&FakeSecretMsgStorer{})
+	server := NewServer(cnf, handlers)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	rec := httptest.NewRecorder()
+	server.handler().ServeHTTP(rec, req)
+
+	// Verify security headers
+	assert.Equal(t, "1; mode=block", rec.Header().Get("X-XSS-Protection"))
+	assert.Equal(t, "nosniff", rec.Header().Get("X-Content-Type-Options"))
+	assert.Equal(t, "DENY", rec.Header().Get("X-Frame-Options"))
+	assert.Contains(t, rec.Header().Get("Content-Security-Policy"), "default-src 'self'")
+}
+
+func TestServerRedirect(t *testing.T) {
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+		AllowedOrigins:     []string{"*"},
+	}
+	handlers := NewSecretHandlers(&FakeSecretMsgStorer{})
+	server := NewServer(cnf, handlers)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	server.handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusPermanentRedirect, rec.Code)
+	assert.Equal(t, "/msg", rec.Header().Get("Location"))
+}
+
+func TestServerWithTLSAutoDomain(t *testing.T) {
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		TLSAutoDomain:      "example.com",
+		VaultPrefix:        "cubbyhole/",
+		AllowedOrigins:     []string{"*"},
+	}
+	handlers := NewSecretHandlers(&FakeSecretMsgStorer{})
+	server := NewServer(cnf, handlers)
+
+	assert.NotNil(t, server)
+	// Verify TLS domain is configured (checking the pointer to avoid copylocks)
+	assert.NotNil(t, server.echo)
+	assert.Equal(t, "example.com", server.config.TLSAutoDomain)
+	assert.Equal(t, autocert.DirCache("/var/www/.cache"), server.echo.AutoTLSManager.Cache)
+}
+
+func TestServerGracefulShutdown(t *testing.T) {
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+		AllowedOrigins:     []string{"*"},
+	}
+	handlers := NewSecretHandlers(&FakeSecretMsgStorer{})
+	server := NewServer(cnf, handlers)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := server.Shutdown(ctx)
+	assert.NoError(t, err)
+}
+
+func TestServerHandlersIntegration(t *testing.T) {
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+		AllowedOrigins:     []string{"*"},
+	}
+	storage := &FakeSecretMsgStorer{
+		token: "test-token-123",
+		msg:   "secret message",
+	}
+	handlers := NewSecretHandlers(storage)
+	server := NewServer(cnf, handlers)
+
+	// Test GET /secret with valid token
+	req := httptest.NewRequest(http.MethodGet, "/secret?token=test-token-123", nil)
+	rec := httptest.NewRecorder()
+	server.handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "secret message")
+}
+
+func TestServerRateLimiting(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping rate limit test in short mode")
+	}
+
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+		AllowedOrigins:     []string{"*"},
+	}
+	handlers := NewSecretHandlers(&FakeSecretMsgStorer{})
+	server := NewServer(cnf, handlers)
+
+	// Make rapid requests to trigger rate limit
+	successCount := 0
+	rateLimitCount := 0
+
+	for i := 0; i < 20; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		req.Header.Set("X-Real-IP", "192.168.1.1")
+		rec := httptest.NewRecorder()
+		server.handler().ServeHTTP(rec, req)
+
+		switch rec.Code {
+		case http.StatusOK:
+			successCount++
+		case http.StatusTooManyRequests:
+			rateLimitCount++
+		}
+	}
+
+	// Should have some rate limited requests
+	assert.Greater(t, rateLimitCount, 0, "Rate limiter should have triggered")
 }
