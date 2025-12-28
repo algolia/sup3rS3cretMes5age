@@ -11,15 +11,6 @@ document.addEventListener('DOMContentLoaded', function() {
     new ClipboardJS('.btn');
 });
 
-// Toggle element visibility
-function toggle(element) {
-    if (element.style.display === 'none' || element.style.display === '') {
-        element.style.display = 'block';
-    } else {
-        element.style.display = 'none';
-    }
-}
-
 // slider.oninput
 document.getElementById("myRange").addEventListener('input', function() {
     if (this.value === '100') { // slider.value returns string
