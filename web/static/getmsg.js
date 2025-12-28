@@ -64,10 +64,10 @@ function showMsg(msg, filetoken, filename) {
         pbar.style.display = 'none';
     }
 
-    // Set message text - use textContent for text, value for textarea
+    // Set message text
     const textarea = $('#textarea1');
     if (textarea) {
-        textarea.value = msg;  // Use .value for textarea, not .textContent
+        textarea.value = msg;
     }
 
     if (filetoken) {

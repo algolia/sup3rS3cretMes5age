@@ -73,10 +73,10 @@ function showURL(token, filetoken, filename) {
   const urlTextarea = $("#url");
 
   if (filetoken) {
-    urlTextarea.textContent = 
+    urlTextarea.value = 
       `${window.location.origin}/getmsg?token=${encodeURIComponent(token)}&filetoken=${encodeURIComponent(filetoken)}&filename=${encodeURIComponent(filename)}`;
     return;
   }
 
-  urlTextarea.textContent = `${window.location.origin}/getmsg?token=${encodeURIComponent(token)}`;
+  urlTextarea.value = `${window.location.origin}/getmsg?token=${encodeURIComponent(token)}`;
 }
