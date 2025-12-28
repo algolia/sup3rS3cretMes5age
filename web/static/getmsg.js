@@ -19,7 +19,8 @@ document.getElementById("myRange").addEventListener('input', function() {
 });
 
 document.querySelector('.encrypt[name="newMsg"]').addEventListener('click', function() {
-    window.location.href = window.location.origin;
+    // Use relative path to avoid open redirect warnings
+    window.location.href = '/';
 });
 
 function validateSecretUrl(token) {
@@ -137,17 +138,17 @@ function b64toBlob(b64Data, contentType, sliceSize) {
     sliceSize = sliceSize || 512;
 
     const byteCharacters = atob(b64Data);
-    let byteArrays = [];
+    const byteArrays = [];
 
     for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
         const slice = byteCharacters.slice(offset, offset + sliceSize);
 
-        let byteNumbers = new Array(slice.length);
+        // Use Uint8Array directly without intermediate Array to avoid object injection
+        const byteArray = new Uint8Array(slice.length);
         for (let i = 0; i < slice.length; i++) {
-            byteNumbers[i] = slice.charCodeAt(i);
+            byteArray[i] = slice.charCodeAt(i);
         }
 
-        const byteArray = new Uint8Array(byteNumbers);
         byteArrays.push(byteArray);
     }
 
