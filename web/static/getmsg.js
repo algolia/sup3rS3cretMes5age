@@ -20,13 +20,12 @@ function toggle(element) {
     }
 }
 
-var slider = document.getElementById("myRange");
-
-slider.oninput = function() {
-    if (this.value == 100) {
+// slider.oninput
+document.getElementById("myRange").addEventListener('input', function() {
+    if (this.value === '100') { // slider.value returns string
         showSecret();
     }
-}
+});
 
 document.querySelector('.encrypt[name="newMsg"]').addEventListener('click', function() {
     window.location.href = window.location.origin;
@@ -95,7 +94,7 @@ function showMsg(msg, filetoken, filename) {
     }
 
     // Reset slider (in case of back button)
-    slider.value = 0;
+    document.getElementById("myRange").value = 0;
 }
 
 function getSecret(token, name) {
