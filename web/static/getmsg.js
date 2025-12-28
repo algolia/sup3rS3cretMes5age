@@ -26,7 +26,7 @@ function showSecret() {
     let params = (new URL(window.location)).searchParams;
 
     // Replace jQuery AJAX with fetch
-    fetch(window.location.origin + "/secret?token=" + params.get('token'), {
+    fetch(`${window.location.origin}/secret?token=${params.get('token')}`, {
         method: 'GET'
     })
     .then(response => {
@@ -84,7 +84,7 @@ function showMsg(msg, filetoken, filename) {
 }
 
 function getSecret(token, name) {
-    fetch(window.location.origin + "/secret?token=" + token, {
+    fetch(`${window.location.origin}/secret?token=${token}`, {
         method: 'get'
     }).then(response =>
         response.json()
@@ -98,7 +98,7 @@ function getSecret(token, name) {
 var saveData = (function () {
     const a = document.createElement("a");
     document.body.appendChild(a);
-    a.style = "display: none";
+    a.style.display = "none";
     return function (data, fileName) {
         const blob = b64toBlob([data], { type: "octet/stream" })
         const url = window.URL.createObjectURL(blob);
