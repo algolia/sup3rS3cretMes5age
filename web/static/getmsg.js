@@ -22,11 +22,30 @@ document.querySelector('.encrypt[name="newMsg"]').addEventListener('click', func
     window.location.href = window.location.origin;
 });
 
+function validateSecretUrl(token) {
+    // Validate token format
+    if (!token || typeof token !== 'string' || !/^[A-Za-z0-9_\-\.]+$/.test(token)) {
+        console.error('Invalid token format');
+        showMsg("Invalid or missing token");
+        return null;
+    }
+
+    // Properly encode URL parameters
+    const url = new URL('/secret', window.location.origin);
+    url.searchParams.set('token', token);
+    return url.toString();
+}
+
 function showSecret() {
-    let params = (new URL(window.location)).searchParams;
+    const params = (new URL(window.location)).searchParams;
+
+    const urlStr = validateSecretUrl(params.get('token'));
+    if (!urlStr) {
+        return;
+    }
 
     // Replace jQuery AJAX with fetch
-    fetch(`${window.location.origin}/secret?token=${params.get('token')}`, {
+    fetch(urlStr, {
         method: 'GET'
     })
     .then(response => {
@@ -84,7 +103,12 @@ function showMsg(msg, filetoken, filename) {
 }
 
 function getSecret(token, name) {
-    fetch(`${window.location.origin}/secret?token=${token}`, {
+    const urlStr = validateSecretUrl(token);
+    if (!urlStr) {
+        return;
+    }
+
+    fetch(urlStr, {
         method: 'get'
     }).then(response =>
         response.json()
