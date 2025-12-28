@@ -110,14 +110,14 @@ function getSecret(token, name) {
 }
 
 var saveData = (function () {
-    var a = document.createElement("a");
+    const a = document.createElement("a");
     document.body.appendChild(a);
     a.style = "display: none";
     return function (data, fileName) {
         console.log("data=", data);
         console.log("fileName=", fileName);
-        var blob = b64toBlob([data], { type: "octet/stream" })
-        var url = window.URL.createObjectURL(blob);
+        const blob = b64toBlob([data], { type: "octet/stream" })
+        const url = window.URL.createObjectURL(blob);
         a.href = url;
         a.download = fileName;
         a.click();
@@ -128,18 +128,18 @@ var saveData = (function () {
 function b64toBlob(b64Data, contentType, sliceSize) {
     sliceSize = sliceSize || 512;
 
-    var byteCharacters = atob(b64Data);
-    var byteArrays = [];
+    const byteCharacters = atob(b64Data);
+    let byteArrays = [];
 
-    for (var offset = 0; offset < byteCharacters.length; offset += sliceSize) {
-        var slice = byteCharacters.slice(offset, offset + sliceSize);
+    for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+        const slice = byteCharacters.slice(offset, offset + sliceSize);
 
-        var byteNumbers = new Array(slice.length);
-        for (var i = 0; i < slice.length; i++) {
+        let byteNumbers = new Array(slice.length);
+        for (let i = 0; i < slice.length; i++) {
             byteNumbers[i] = slice.charCodeAt(i);
         }
 
-        var byteArray = new Uint8Array(byteNumbers);
+        const byteArray = new Uint8Array(byteNumbers);
 
         byteArrays.push(byteArray);
     }
