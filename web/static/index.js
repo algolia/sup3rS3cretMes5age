@@ -9,15 +9,6 @@
 // Initialize clipboard functionality
 new ClipboardJS(".btn");
 
-// DOM helper functions
-function $(selector) {
-  return document.querySelector(selector);
-}
-
-function $$(selector) {
-  return document.querySelectorAll(selector);
-}
-
 // CSS manipulation helper
 function setStyles(element, styles) {
   Object.assign(element.style, styles);

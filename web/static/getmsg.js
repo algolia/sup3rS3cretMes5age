@@ -6,14 +6,6 @@
  * with automatic base64 decoding. All event handlers are CSP-compliant.
  */
 
-// DOM helper functions
-function $(selector) {
-    return document.querySelector(selector);
-}
-
-function $$(selector) {
-    return document.querySelectorAll(selector);
-}
 
 // Toggle element visibility
 function toggle(element) {
@@ -110,7 +102,6 @@ function getSecret(token, name) {
     }).then(response =>
         response.json()
     ).then(json => {
-        //decodedMsg = window.atob(json.msg)//console.log("response=", json.msg);
         saveData(json.msg, name);
     }).catch(function (err) {
         console.error(err);
@@ -124,7 +115,6 @@ var saveData = (function () {
     return function (data, fileName) {
         console.log("data=", data);
         console.log("fileName=", fileName);
-        //var blob = new Blob([json], { type: "octet/stream" }),
         var blob = b64toBlob([data], { type: "octet/stream" })
         var url = window.URL.createObjectURL(blob);
         a.href = url;
