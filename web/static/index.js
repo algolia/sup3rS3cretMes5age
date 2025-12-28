@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', function() {
       showURL(data.token, data.filetoken, data.filename);
     })
     .catch(error => {
-      console.error('Error:', error);
+      console.error(`An error occurred: ${error}`);
       alert('An error occurred while creating the secret message.');
     });
   });

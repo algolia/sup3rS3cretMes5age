@@ -24,7 +24,6 @@ document.querySelector('.encrypt[name="newMsg"]').addEventListener('click', func
 
 function showSecret() {
     let params = (new URL(window.location)).searchParams;
-    console.log(window.location.origin + "/secret?token=" + params.get('token') + "&filetoken=" + params.get('filetoken') + "&filename=" + params.get('filename'));
 
     // Replace jQuery AJAX with fetch
     fetch(window.location.origin + "/secret?token=" + params.get('token'), {
@@ -37,13 +36,10 @@ function showSecret() {
         return response.json();
     })
     .then(data => {
-        console.log('Submission was successful.');
-        console.log(data);
         showMsg(data.msg, params.get('filetoken'), params.get('filename'));
     })
     .catch(error => {
-        console.log('An error occurred.');
-        console.log(error);
+        console.error(`An error occurred: ${error}`);
         showMsg("Message was already deleted :(");
     });
 };
@@ -62,7 +58,6 @@ function showMsg(msg, filetoken, filename) {
     }
 
     if (filetoken) {
-        console.log('filetoken=', filetoken);
         getSecret(filetoken, filename);
     }
 
@@ -96,7 +91,7 @@ function getSecret(token, name) {
     ).then(json => {
         saveData(json.msg, name);
     }).catch(function (err) {
-        console.error(err);
+        console.error(`An error occurred: ${err}`);
     });
 }
 
@@ -105,8 +100,6 @@ var saveData = (function () {
     document.body.appendChild(a);
     a.style = "display: none";
     return function (data, fileName) {
-        console.log("data=", data);
-        console.log("fileName=", fileName);
         const blob = b64toBlob([data], { type: "octet/stream" })
         const url = window.URL.createObjectURL(blob);
         a.href = url;
@@ -131,7 +124,6 @@ function b64toBlob(b64Data, contentType, sliceSize) {
         }
 
         const byteArray = new Uint8Array(byteNumbers);
-
         byteArrays.push(byteArray);
     }
 
