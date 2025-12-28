@@ -6,9 +6,6 @@
  * All event handlers are CSP-compliant.
  */
 
-// Initialize clipboard functionality
-new ClipboardJS(".btn");
-
 // CSS manipulation helper
 function setStyles(element, styles) {
   Object.assign(element.style, styles);
@@ -16,6 +13,8 @@ function setStyles(element, styles) {
 
 // Form submission handler
 document.addEventListener('DOMContentLoaded', function() {
+  // Initialize clipboard functionality
+  new ClipboardJS('.btn');
   const form = $("#secretform");
 
   form.addEventListener('submit', function(e) {

@@ -6,6 +6,10 @@
  * with automatic base64 decoding. All event handlers are CSP-compliant.
  */
 
+// Initialize clipboard functionality
+document.addEventListener('DOMContentLoaded', function() {
+    new ClipboardJS('.btn');
+});
 
 // Toggle element visibility
 function toggle(element) {
@@ -29,8 +33,6 @@ document.querySelector('.encrypt[name="newMsg"]').addEventListener('click', func
 });
 
 function showSecret() {
-    new ClipboardJS('.btn');
-
     let params = (new URL(window.location)).searchParams;
     console.log(window.location.origin + "/secret?token=" + params.get('token') + "&filetoken=" + params.get('filetoken') + "&filename=" + params.get('filename'));
 
