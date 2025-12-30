@@ -1,9 +1,9 @@
 module github.com/algolia/sup3rS3cretMes5age
 
-go 1.25.1
+go 1.25.3
 
 require (
-	github.com/hashicorp/vault v1.21.0
+	github.com/hashicorp/vault v1.21.1
 	github.com/hashicorp/vault/api v1.22.0
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/stretchr/testify v1.11.1
@@ -101,7 +101,7 @@ require (
 	github.com/gammazero/deque v0.2.1 // indirect
 	github.com/gammazero/workerpool v1.1.3 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.4 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.2 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
@@ -294,7 +294,7 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/exp v0.0.0-20251002181428-27f1f14c8bb9 // indirect
+	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/mod v0.30.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.31.0 // indirect
