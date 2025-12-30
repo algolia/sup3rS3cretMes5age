@@ -1,4 +1,4 @@
-version: '3.2'
+version: '3.8'
 
 services:
   vault:
@@ -6,12 +6,23 @@ services:
     container_name: vault
     environment:
       VAULT_DEV_ROOT_TOKEN_ID: supersecret
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
     cap_add:
       - IPC_LOCK
     security_opt:
       - no-new-privileges:true
-    expose:
-      - 8200
+      - seccomp=unconfined
+    tmpfs:
+      - /tmp
+      - /dev/shm
+    networks:
+      - secure-network
+    # Security-focused health check
+    healthcheck:
+      test: ["CMD", "vault", "status", "-address=http://localhost:8200"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   supersecret:
     build:
@@ -23,10 +34,48 @@ services:
       VAULT_ADDR: http://vault:8200
       VAULT_TOKEN: supersecret
       SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS: ":8082"
+      SUPERSECRETMESSAGE_HTTPS_REDIRECT_ENABLED: "false"
+      # Security-focused environment variables
+      GODEBUG: "x509ignoreCN=0"
+      GOGC: "200"
+      GOMAXPROCS: "1"
     security_opt:
       - no-new-privileges:true
+      - apparmor=unconfined
+      - seccomp=unconfined
     read_only: true
+    # Mount only necessary directories as read-only
+    tmpfs:
+      - /tmp
     ports:
       - "8082:8082"
     depends_on:
       - vault
+    networks:
+      - secure-network
+    # Enhanced security configurations
+    sysctls:
+      - net.ipv4.conf.all.rp_filter=1
+      - net.ipv4.conf.all.secure_redirects=0
+    ulimits:
+      nproc: 65536
+      nofile: 65536
+    # Security-focused health check
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # Resource limits for security
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+
+networks:
+  secure-network:
+    driver: bridge

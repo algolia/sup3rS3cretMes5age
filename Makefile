@@ -10,6 +10,8 @@ DOCKER_OPS := -f deploy/Dockerfile
 TAG=$(shell git describe --tags --abbrev=0)
 VERSION=$(shell echo "$(TAG)" | sed -e 's/^v//')
 COMMIT=$(shell git rev-parse --short HEAD)
+BUILD_DATE=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+VCS_REF=$(shell git rev-parse HEAD)
 
 ATTESTATIONS=--provenance=true --sbom=true
 PLATFORMS=--platform linux/amd64,linux/arm64
@@ -20,12 +22,14 @@ test:
 image:
 	docker buildx build $(ATTESTATIONS) $(PLATFORMS) \
 		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILD_DATE="$(BUILD_DATE)" \
+		--build-arg VCS_REF=$(VCS_REF) \
 		-t algolia/supersecretmessage:$(VERSION) \
 		-t algolia/supersecretmessage:$(COMMIT) \
 		-t algolia/supersecretmessage:latest \
 		$(DOCKER_OPS) .
 
-build: 
+build:
 	@docker compose $(COMPOSE_OPTS) build
 
 clean:
@@ -35,7 +39,7 @@ run-local: clean
         @DOMAIN=$(DOMAIN) \
 	docker compose $(COMPOSE_OPTS) up --build -d
 
-run: 
+run:
 	@DOMAIN=$(DOMAIN) \
         docker compose $(COMPOSE_OPTS) up --build -d
 
