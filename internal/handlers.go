@@ -7,11 +7,15 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
 )
+
+// tokenRegex matches valid Vault token formats for hv.sb and legacy tokens.
+var tokenRegex = regexp.MustCompile(`^hv[sb]\.(?:[A-Za-z0-9]{24}|[A-Za-z0-9_-]{91,})$`)
 
 // TokenResponse represents the API response when creating a new secret message.
 // It includes a token for retrieving the message, and optional file token and name
@@ -97,6 +101,15 @@ func validateFileUpload(file *multipart.FileHeader) error {
 	return nil
 }
 
+// validateVaultToken checks the format of Vault-generated tokens
+func validateVaultToken(token string) error {
+	// Check token format
+	if !tokenRegex.MatchString(token) {
+		return fmt.Errorf("invalid token format: %s", token)
+	}
+	return nil
+}
+
 // CreateMsgHandler handles POST requests to create a new self-destructing secret message.
 // It accepts form data with 'msg' (required), 'ttl' (optional time-to-live), and 'file' (optional file upload).
 // Files are base64 encoded before storage. Maximum file size is 50MB (enforced by middleware).
@@ -159,7 +172,12 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 // Accepts a 'token' query parameter. The message is deleted from Vault after retrieval,
 // making it accessible only once. Returns a JSON response with the message content.
 func (s SecretHandlers) GetMsgHandler(ctx echo.Context) error {
-	m, err := s.store.Get(ctx.QueryParam("token"))
+	token := ctx.QueryParam("token")
+	if err := validateVaultToken(token); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	m, err := s.store.Get(token)
 	if err != nil {
 		ctx.Logger().Errorf("Failed to retrieve secret: %v", err)
 		return echo.NewHTTPError(http.StatusNotFound, "secret not found or already consumed")
