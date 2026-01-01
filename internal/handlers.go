@@ -198,3 +198,47 @@ func healthHandler(ctx echo.Context) error {
 func redirectHandler(ctx echo.Context) error {
 	return ctx.Redirect(http.StatusPermanentRedirect, "/msg")
 }
+
+// isValidLanguage checks if the provided language code is supported.
+func isValidLanguage(lang string) bool {
+	validLanguages := []string{"en", "fr", "es", "de", "it"}
+	for _, valid := range validLanguages {
+		if valid == lang {
+			return true
+		}
+	}
+	return false
+}
+
+// htmlHandler serves HTML files with language preference handling.
+func htmlHandler(ctx echo.Context, path string) error {
+	// Check for language preference in cookie or header
+	lang := ctx.QueryParam("lang")
+	if lang == "" {
+		lang = ctx.Request().Header.Get("Accept-Language")
+		if lang != "" {
+			// Extract primary language (e.g., "en-US,en;q=0.9" -> "en")
+			lang = strings.Split(lang, ",")[0]
+			lang = strings.Split(lang, "-")[0]
+		}
+	}
+
+	// Set default language if none found
+	if lang == "" || !isValidLanguage(lang) {
+		lang = "en"
+	}
+
+	// Pass language to template context
+	ctx.Response().Header().Set("Content-Language", lang)
+	return ctx.File(path)
+}
+
+// indexHandler serves the main message creation HTML page.
+func indexHandler(ctx echo.Context) error {
+	return htmlHandler(ctx, "static/index.html")
+}
+
+// getmsgHandler serves the message retrieval HTML page.
+func getmsgHandler(ctx echo.Context) error {
+	return htmlHandler(ctx, "static/getmsg.html")
+}
