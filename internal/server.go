@@ -263,9 +263,9 @@ func setupRoutes(e *echo.Echo, handlers *SecretHandlers) {
 	e.GET("/secret", handlers.GetMsgHandler)
 	e.POST("/secret", handlers.CreateMsgHandler)
 
-	e.File("/msg", "static/index.html")
+	e.GET("/msg", indexHandler)
 
-	e.File("/getmsg", "static/getmsg.html")
+	e.GET("/getmsg", getmsgHandler)
 
 	e.Static("/static", "static")
 }
