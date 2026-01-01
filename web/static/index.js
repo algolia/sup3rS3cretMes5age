@@ -6,6 +6,8 @@
  * All event handlers are CSP-compliant.
  */
 
+import { $, setupLanguage } from './utils.js';
+
 // CSS manipulation helper
 function setStyles(element, styles) {
   Object.assign(element.style, styles);
@@ -15,6 +17,30 @@ function setStyles(element, styles) {
 document.addEventListener('DOMContentLoaded', function() {
   // Initialize clipboard functionality
   new ClipboardJS('.btn');
+
+  // Initialize language manager
+  setupLanguage();
+
+  // Custom file input handler
+  const fileInput = document.getElementById('file-input');
+  const fileNameSpan = $('.file-name');
+  const originalFileNameI18nKey = fileNameSpan ? fileNameSpan.getAttribute('data-i18n') : null;
+  if (fileInput && fileNameSpan) {
+    fileInput.addEventListener('change', function() {
+      if (this.files && this.files.length > 0) {
+        fileNameSpan.textContent = this.files[0].name;
+        fileNameSpan.classList.add('has-file');
+        fileNameSpan.removeAttribute('data-i18n');
+      } else {
+        fileNameSpan.textContent = window.langManager?.translate('no_file_chosen') || 'No file chosen';
+        fileNameSpan.classList.remove('has-file');
+        if (originalFileNameI18nKey) {
+          fileNameSpan.setAttribute('data-i18n', originalFileNameI18nKey);
+        }
+      }
+    });
+  }
+
   const form = $("#secretform");
 
   form.addEventListener('submit', function(e) {
@@ -64,7 +90,7 @@ document.addEventListener('DOMContentLoaded', function() {
     })
     .catch(error => {
       console.error(`An error occurred: ${error}`);
-      alert('An error occurred while creating the secret message.');
+      window.alert('An error occurred while creating the secret message.');
     });
   });
 });
