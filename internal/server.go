@@ -339,6 +339,9 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 		MaxAge:       86400,
 	}))
 
+	// Enable Gzip compression for all responses
+	e.Use(middleware.Gzip())
+
 	// Limit to rateLimitRate RPS (rateLimitBurst burst) per client IP, per
 	// the repository's security contract: the security checklist pins the
 	// limiter at 10 RPS/burst 20 and flags any change as a protection
