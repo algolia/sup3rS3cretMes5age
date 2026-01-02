@@ -260,12 +260,19 @@ func setupRoutes(e *echo.Echo, handlers *SecretHandlers) {
 
 	e.Any("/health", healthHandler)
 
+	// API secret endpoints
 	e.GET("/secret", handlers.GetMsgHandler)
 	e.POST("/secret", handlers.CreateMsgHandler)
 
+	// HTML page handlers
 	e.GET("/msg", indexHandler)
-
 	e.GET("/getmsg", getmsgHandler)
 
-	e.Static("/static", "static")
+	// Static assets with tiered caching
+	static := e.Group("/static")
+	staticMethods := []string{"GET", "HEAD"}
+	static.Match(staticMethods, "/fonts/*", fontCacheHandler)
+	static.Match(staticMethods, "/icons/*", longCacheHandler)
+	static.Match(staticMethods, "/locales/*", mediumCacheHandler)
+	static.Match(staticMethods, "/*", shortCacheHandler)
 }
