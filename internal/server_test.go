@@ -200,7 +200,7 @@ func TestServerRateLimiting(t *testing.T) {
 	successCount := 0
 	rateLimitCount := 0
 
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 30; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		req.Header.Set("X-Real-IP", "192.168.1.1")
 		rec := httptest.NewRecorder()
