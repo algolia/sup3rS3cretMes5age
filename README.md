@@ -23,6 +23,10 @@ Read more about the reasoning behind this project in the [relevant blog post](ht
 - **🔐 Vault-Backed Security**: Uses HashiCorp Vault's cubbyhole for tamper-proof storage
 - **🎫 One-Time Tokens**: Vault tokens with exactly 2 uses (create + retrieve)
 - **🚦 Rate Limiting**: Built-in protection (10 requests/second, burst 20)
+- **🌍 Multi-Language Support**: Interface available in 5 languages (EN, FR, DE, ES, IT)
+  - Automatic language detection from browser preferences
+  - URL-based language selection (`?lang=fr`)
+  - Dynamic switching without page reload
 - **🔒 TLS/HTTPS Support**: 
   - Automatic TLS via [Let's Encrypt](https://letsencrypt.org/)
   - Manual certificate configuration
@@ -40,6 +44,7 @@ Read more about the reasoning behind this project in the [relevant blog post](ht
 - [Quick Start](#-quick-start)
 - [Deployment](#deployment)
 - [Configuration](#configuration-options)
+- [Multi-Language Support](#-multi-language-support)
 - [Command Line Usage](#command-line-usage)
 - [Helm Chart](#helm)
 - [API Reference](#-api-reference)
@@ -49,17 +54,23 @@ Read more about the reasoning behind this project in the [relevant blog post](ht
 
 ## Frontend Dependencies
 
-The web interface is built with modern **vanilla JavaScript** and has minimal external dependencies:
+The web interface is built with modern **vanilla JavaScript** (ES6 modules) and has minimal external dependencies:
 
 | Dependency | Size | Purpose |
 |------------|------|----------|
 | ClipboardJS v2.0.11 | 8.9KB | Copy to clipboard functionality |
 | Montserrat Font | 46KB | Self-hosted typography |
-| Custom CSS | 2.3KB | Application styling |
+| Custom CSS | 3.3KB | Application styling (minified) |
+| Translation files | ~1KB each | i18n support (loaded on-demand) |
 
 ✅ **No external CDNs or tracking** - All dependencies are self-hosted for privacy and security.
 
 📦 **Total JavaScript bundle size**: 8.9KB (previously 98KB with jQuery)
+
+🌍 **Internationalization**: 5 languages supported (English, French, German, Spanish, Italian)
+- Translations loaded asynchronously on-demand
+- Browser language auto-detection
+- Seamless language switching without page reload
 
 ## 🚀 Quick Start
 
@@ -399,15 +410,54 @@ SUPERSECRETMESSAGE_TLS_CERT_FILEPATH=/mnt/ssl/cert_secrets.example.com.pem
 SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH=/mnt/ssl/key_secrets.example.com.pem
 ```
 
+## 🌍 Multi-Language Support
+
+The application supports 5 languages with automatic detection and seamless switching:
+
+### Supported Languages
+
+| Language | Code | Translation Coverage |
+|----------|------|---------------------|
+| 🇬🇧 English | `en` | Complete (23 keys) |
+| 🇫🇷 French | `fr` | Complete (23 keys) |
+| 🇩🇪 German | `de` | Complete (23 keys) |
+| 🇪🇸 Spanish | `es` | Complete (23 keys) |
+| 🇮🇹 Italian | `it` | Complete (23 keys) |
+
+### Usage
+
+**Automatic Detection**: The application automatically detects the user's preferred language from:
+1. URL parameter: `https://example.com/?lang=fr`
+2. Browser language settings
+3. Defaults to English if no match
+
+**Manual Selection**: Users can switch languages using the selector in the top-right corner.
+
+**Features**:
+- ✅ No page reload required
+- ✅ Language preference persisted in URL
+- ✅ Dynamic updates of all UI elements
+- ✅ Translates meta tags for SEO
+- ✅ Updates HTML `lang` attribute for accessibility
+- ✅ Translations loaded asynchronously (only active language)
+
+### Technical Implementation
+
+- **ES6 Modules**: Modern JavaScript with proper import/export
+- **CSP-Compliant**: All event handlers use `addEventListener()`
+- **i18n System**: Centralized in `utils.js` with `data-i18n` attributes
+- **Translation Files**: JSON format in `/static/locales/`
+- **Size Impact**: ~1KB per language file (loaded on-demand)
+
 ## 📸 Screenshots
 
 ### Message Creation Interface
-![supersecretmsg](https://github.com/user-attachments/assets/0ada574b-99e4-4562-aea4-a1868d6ca0d8)
+![supersecretmsg](https://github.com/user-attachments/assets/95fa8704-118b-4a42-b4a0-4f59b82ce1d1)
 
 *Clean, intuitive interface for creating self-destructing messages with optional file uploads and custom TTL.*
 
 ### Message Retrieval Interface
-![supersecretmsg](https://github.com/user-attachments/assets/6d0c455f-00ca-430e-bc8c-e721e071843a")
+![supersecretmsg](https://github.com/user-attachments/assets/74a6ff23-b459-4ead-8c6d-13bdf15a3a65)
 
 *Simple, secure interface for viewing self-destructing messages that are permanently deleted upon retrieval.*
 
@@ -461,25 +511,34 @@ go vet ./...
 ```
 .
 ├── cmd/sup3rS3cretMes5age/    # Application entry point
-│   └── main.go               # (23 lines)
+│   └── main.go               # (67 lines)
 ├── internal/                  # Core business logic
-│   ├── config.go             # Configuration (77 lines)
-│   ├── handlers.go           # HTTP handlers (88 lines)
-│   ├── server.go             # Server setup (94 lines)
-│   └── vault.go              # Vault integration (174 lines)
+│   ├── config.go             # Configuration handling (83 lines)
+│   ├── handlers.go           # HTTP request handlers (201 lines)
+│   ├── server.go             # Web server setup (370 lines)
+│   └── vault.go              # Vault integration (192 lines)
 ├── web/static/               # Frontend assets
 │   ├── index.html           # Message creation page
 │   ├── getmsg.html          # Message retrieval page
+│   ├── index.js             # Main page logic (ES6 modules)
+│   ├── getmsg.js            # Retrieval page logic (ES6 modules)
+│   ├── utils.js             # i18n utilities & helpers (130 lines)
 │   ├── application.css      # Styling
-│   └── clipboard-2.0.11.min.js
+│   ├── clipboard-2.0.11.min.js
+│   └── locales/             # Translation files
+│       ├── en.json          # English (23 keys)
+│       ├── fr.json          # French (23 keys)
+│       ├── de.json          # German (23 keys)
+│       ├── es.json          # Spanish (23 keys)
+│       └── it.json          # Italian (23 keys)
 ├── deploy/                   # Deployment configs
-│   ├── Dockerfile           # Multi-stage build
-│   ├── docker-compose.yml   # Local dev stack
-│   └── charts/              # Helm chart
-└── Makefile                 # Build automation
+│   ├── Dockerfile           # Multi-stage build with security hardening
+│   ├── docker-compose.yml   # Local dev stack with resource limits
+│   └── charts/              # Helm chart for Kubernetes
+└── Makefile                 # Build automation & minification
 ```
 
-**Total Code**: 609 lines of Go across 7 files
+**Total Code**: 1,043 lines of Go across 4 core files (excluding tests)
 
 ## Contributing
 
