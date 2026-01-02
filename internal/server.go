@@ -210,6 +210,9 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 		MaxAge:       86400,
 	}))
 
+	// Enable Gzip compression for all responses
+	e.Use(middleware.Gzip())
+
 	// Limit to 5 RPS (burst 10) (only human should use this service)
 	e.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
 		Store: middleware.NewRateLimiterMemoryStoreWithConfig(
