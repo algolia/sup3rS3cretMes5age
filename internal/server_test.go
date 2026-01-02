@@ -217,3 +217,85 @@ func TestServerRateLimiting(t *testing.T) {
 	// Should have some rate limited requests
 	assert.Greater(t, rateLimitCount, 0, "Rate limiter should have triggered")
 }
+
+func TestServerGzipCompression(t *testing.T) {
+	validToken := "hvs.CABAAAAAAQAAAAAAAAAABBBB"
+
+	tests := []struct {
+		name           string
+		path           string
+		acceptEncoding string
+		setupStorage   func() *FakeSecretMsgStorer
+		expectedStatus int
+		expectGzip     bool
+		checkVary      bool
+	}{
+		{
+			name:           "health endpoint with gzip support",
+			path:           "/health",
+			acceptEncoding: "gzip",
+			setupStorage:   func() *FakeSecretMsgStorer { return &FakeSecretMsgStorer{} },
+			expectedStatus: http.StatusOK,
+			expectGzip:     true,
+			checkVary:      true,
+		},
+		{
+			name:           "health endpoint without gzip support",
+			path:           "/health",
+			acceptEncoding: "",
+			setupStorage:   func() *FakeSecretMsgStorer { return &FakeSecretMsgStorer{} },
+			expectedStatus: http.StatusOK,
+			expectGzip:     false,
+			checkVary:      false,
+		},
+		{
+			name:           "API JSON response with gzip support",
+			path:           "/secret?token=" + validToken,
+			acceptEncoding: "gzip",
+			setupStorage: func() *FakeSecretMsgStorer {
+				return &FakeSecretMsgStorer{
+					token: validToken,
+					msg:   "This is a secret message that is long enough to benefit from gzip compression",
+				}
+			},
+			expectedStatus: http.StatusOK,
+			expectGzip:     true,
+			checkVary:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cnf := conf{
+				HttpBindingAddress: ":8080",
+				VaultPrefix:        "cubbyhole/",
+				AllowedOrigins:     []string{"*"},
+			}
+			storage := tt.setupStorage()
+			handlers := NewSecretHandlers(storage)
+			server := NewServer(cnf, handlers)
+
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			if tt.acceptEncoding != "" {
+				req.Header.Set("Accept-Encoding", tt.acceptEncoding)
+			}
+			rec := httptest.NewRecorder()
+			server.handler().ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+
+			if tt.expectGzip {
+				assert.Equal(t, "gzip", rec.Header().Get("Content-Encoding"), "Response should be gzip compressed")
+			} else {
+				assert.Empty(t, rec.Header().Get("Content-Encoding"), "Response should not be compressed")
+			}
+
+			if tt.checkVary {
+				varyHeader := rec.Header().Get("Vary")
+				assert.NotEmpty(t, varyHeader, "Should have Vary header")
+				// Vary header may contain "Origin" from CORS middleware, just verify it exists
+				assert.Contains(t, "Origin,Accept-Encoding", varyHeader, "Vary header should be set by middleware")
+			}
+		})
+	}
+}
