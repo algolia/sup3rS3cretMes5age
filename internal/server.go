@@ -214,8 +214,8 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 	e.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
 		Store: middleware.NewRateLimiterMemoryStoreWithConfig(
 			middleware.RateLimiterMemoryStoreConfig{
-				Rate:      5,
-				Burst:     10,
+				Rate:      10,
+				Burst:     20,
 				ExpiresIn: 1 * time.Minute,
 			},
 		),
