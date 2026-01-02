@@ -165,15 +165,17 @@ func TestServerHandlersIntegration(t *testing.T) {
 		VaultPrefix:        "cubbyhole/",
 		AllowedOrigins:     []string{"*"},
 	}
+	// Use valid Vault token format (hvs. prefix + 24 alphanumeric chars)
+	validToken := "hvs.CABAAAAAAQAAAAAAAAAABBBB"
 	storage := &FakeSecretMsgStorer{
-		token: "test-token-123",
+		token: validToken,
 		msg:   "secret message",
 	}
 	handlers := NewSecretHandlers(storage)
 	server := NewServer(cnf, handlers)
 
 	// Test GET /secret with valid token
-	req := httptest.NewRequest(http.MethodGet, "/secret?token=test-token-123", nil)
+	req := httptest.NewRequest(http.MethodGet, "/secret?token="+validToken, nil)
 	rec := httptest.NewRecorder()
 	server.handler().ServeHTTP(rec, req)
 

@@ -33,36 +33,69 @@ func (f *FakeSecretMsgStorer) Store(msg string, ttl string) (token string, err e
 	return f.token, f.err
 }
 
-func TestGetMsgHandlerSuccess(t *testing.T) {
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/?token=secrettoken", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+func TestGetMsgHandler(t *testing.T) {
+	tests := []struct {
+		name           string
+		token          string
+		storedMsg      string
+		storeErr       error
+		expectedStatus int
+		expectedMsg    string
+		expectError    bool
+	}{
+		{
+			name:           "successful message retrieval",
+			token:          "hvs.CABAAAAAAQAAAAAAAAAABBBB",
+			storedMsg:      "secret",
+			storeErr:       nil,
+			expectedStatus: http.StatusOK,
+			expectedMsg:    "{\"msg\":\"secret\"}\n",
+			expectError:    false,
+		},
+		{
+			name:           "message retrieval with error",
+			token:          "hvs.CABAAAAAAQAAAAAAAAAABBBB",
+			storedMsg:      "secret",
+			storeErr:       errors.New("expired"),
+			expectedStatus: http.StatusNotFound,
+			expectedMsg:    "",
+			expectError:    true,
+		},
+		{
+			name:           "invalid token format",
+			token:          "invalid-token-123",
+			storedMsg:      "",
+			storeErr:       nil,
+			expectedStatus: http.StatusBadRequest,
+			expectedMsg:    "",
+			expectError:    true,
+		},
+	}
 
-	s := &FakeSecretMsgStorer{msg: "secret"}
-	h := NewSecretHandlers(s)
-	err := h.GetMsgHandler(c)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodGet, "/?token="+tt.token, nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
 
-	assert.NoError(t, err)
-	assert.Equal(t, "secrettoken", s.lastUsedToken)
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "{\"msg\":\"secret\"}\n", rec.Body.String())
-}
+			s := &FakeSecretMsgStorer{msg: tt.storedMsg, err: tt.storeErr}
+			h := NewSecretHandlers(s)
+			err := h.GetMsgHandler(c)
 
-func TestGetMsgHandlerError(t *testing.T) {
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/?token=secrettoken", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-
-	s := &FakeSecretMsgStorer{msg: "secret", err: errors.New("expired")}
-	h := NewSecretHandlers(s)
-	err := h.GetMsgHandler(c)
-
-	assert.Error(t, err)
-	if assert.IsType(t, &echo.HTTPError{}, err) {
-		v, _ := err.(*echo.HTTPError)
-		assert.Equal(t, http.StatusNotFound, v.Code)
+			if tt.expectError {
+				assert.Error(t, err)
+				if assert.IsType(t, &echo.HTTPError{}, err) {
+					v, _ := err.(*echo.HTTPError)
+					assert.Equal(t, tt.expectedStatus, v.Code)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.token, s.lastUsedToken)
+				assert.Equal(t, tt.expectedStatus, rec.Code)
+				assert.Equal(t, tt.expectedMsg, rec.Body.String())
+			}
+		})
 	}
 }
 
