@@ -210,12 +210,15 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 		MaxAge:       86400,
 	}))
 
+	// Enable Gzip compression for all responses
+	e.Use(middleware.Gzip())
+
 	// Limit to 5 RPS (burst 10) (only human should use this service)
 	e.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
 		Store: middleware.NewRateLimiterMemoryStoreWithConfig(
 			middleware.RateLimiterMemoryStoreConfig{
-				Rate:      5,
-				Burst:     10,
+				Rate:      10,
+				Burst:     20,
 				ExpiresIn: 1 * time.Minute,
 			},
 		),
@@ -260,12 +263,19 @@ func setupRoutes(e *echo.Echo, handlers *SecretHandlers) {
 
 	e.Any("/health", healthHandler)
 
+	// API secret endpoints
 	e.GET("/secret", handlers.GetMsgHandler)
 	e.POST("/secret", handlers.CreateMsgHandler)
 
-	e.File("/msg", "static/index.html")
+	// HTML page handlers
+	e.GET("/msg", indexHandler)
+	e.GET("/getmsg", getmsgHandler)
 
-	e.File("/getmsg", "static/getmsg.html")
-
-	e.Static("/static", "static")
+	// Static assets with tiered caching
+	static := e.Group("/static")
+	staticMethods := []string{"GET", "HEAD"}
+	static.Match(staticMethods, "/fonts/*", fontCacheHandler)
+	static.Match(staticMethods, "/icons/*", longCacheHandler)
+	static.Match(staticMethods, "/locales/*", mediumCacheHandler)
+	static.Match(staticMethods, "/*", shortCacheHandler)
 }

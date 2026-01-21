@@ -6,6 +6,8 @@
  * All event handlers are CSP-compliant.
  */
 
+import { $, setupLanguage } from './utils.js';
+
 // CSS manipulation helper
 function setStyles(element, styles) {
   Object.assign(element.style, styles);
@@ -15,6 +17,25 @@ function setStyles(element, styles) {
 document.addEventListener('DOMContentLoaded', function() {
   // Initialize clipboard functionality
   new ClipboardJS('.btn');
+
+  // Initialize language manager
+  setupLanguage();
+
+  // Custom file input handler
+  const fileInput = document.getElementById('file-input');
+  const fileNameSpan = $('.file-name');
+  if (fileInput && fileNameSpan) {
+    fileInput.addEventListener('change', function() {
+      if (this.files && this.files.length > 0) {
+        fileNameSpan.textContent = this.files[0].name;
+        fileNameSpan.classList.add('has-file');
+      } else {
+        fileNameSpan.textContent = window.langManager?.translate('no_file_chosen') || 'No file chosen';
+        fileNameSpan.classList.remove('has-file');
+      }
+    });
+  }
+
   const form = $("#secretform");
 
   form.addEventListener('submit', function(e) {

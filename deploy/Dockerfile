@@ -26,6 +26,34 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o /tmp/sup3rS3cretMes5age \
     cmd/sup3rS3cretMes5age/main.go
 
+# Web assets minification stage
+FROM node:latest AS web-builder
+WORKDIR /app
+COPY web/ ./
+# Minify JS and CSS files
+RUN npm install -g @node-minify/cli \
+    @node-minify/terser \
+    @node-minify/lightningcss \
+    @node-minify/html-minifier \
+    @node-minify/jsonminify && \
+    cd static && \
+    for fi in utils.js index.js getmsg.js; \
+    do \
+      node-minify --compressor terser --input "$fi" --output "min.$fi" && mv "min.$fi" "$fi"; \
+    done && \
+    for fi in *.html; \
+    do \
+      node-minify --compressor html-minifier --input "$fi" --output "min.$fi" && mv "min.$fi" "$fi"; \
+    done && \
+    node-minify --compressor lightningcss --input application.css --output min.application.css && mv min.application.css application.css && \
+    ls -l && \
+    cd locales && \
+    for fi in *.json; \
+    do \
+      node-minify --compressor jsonminify --input "$fi" --output "min.$fi" && mv "min.$fi" "$fi"; \
+    done && \
+    ls -l
+
 # Multi-stage build with security hardening
 FROM alpine:latest
 
@@ -45,7 +73,7 @@ WORKDIR /opt/supersecret
 
 # Copy binary and static assets
 COPY --from=builder --chown=supersecret:supersecret /tmp/sup3rS3cretMes5age ./sup3rS3cretMes5age
-COPY --chown=supersecret:supersecret web/static/ ./static/
+COPY --from=web-builder --chown=supersecret:supersecret /app/static ./static
 
 # Set proper file permissions
 RUN chmod 755 ./sup3rS3cretMes5age \

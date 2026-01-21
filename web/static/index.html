@@ -1,48 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <title>sup3rS3cretMes5age</title>
+    <title data-i18n="meta_title">sup3rS3cretMes5age</title>
     <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16x16.png">
     <link rel="manifest" href="/static/icons/manifest.json">
     <link rel="mask-icon" href="/static/icons/safari-pinned-tab.svg" color="#5bbad5">
     <meta name="theme-color" content="#ffffff">
-    <meta name="description" content="Send self-destructing one-time secret messages securely. Messages are automatically deleted after first read.">
+    <meta name="description" data-i18n="meta_description" content="Send self-destructing one-time secret messages securely. Messages are automatically deleted after first read.">
     <!--Let browser know website is optimized for mobile-->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link href="/static/montserrat.css" rel="stylesheet">
     <link href="/static/application.css" rel="stylesheet">
     <meta charset="UTF-8">
     <!-- Facebook/Slack Meta Tags-->
-    <meta property="og:title" content="Self Destructing Secure Message" />
+    <meta property="og:title" data-i18n="meta_title" content="Self Destructing Secure Message" />
     <meta property="og:image" content="/static/icons/android-chrome-512x512.png" />
     <meta property="og:site_name" content="sup3rS3cretMes5age" />
-    <meta property="og:description" content="A self destructing one time secure msg service, have fun, stay secure!" />
+    <meta property="og:description" data-i18n="meta_description" content="A self destructing one time secure msg service, have fun, stay secure!" />
     <meta property="og:type" content="website">
   </head>
   <body>
     <main class="send">
       <div class="container">
-        <h1>Secret Message</h1>
-        <p class="subtitle">Send a secret one-time read only message</p>
+        <div class="language-selector">
+          <select id="language-select">
+            <option value="en" selected>English</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="es">Español</option>
+            <option value="it">Italiano</option>
+          </select>
+        </div>
+        <h1 data-i18n="secret_message">Secret Message</h1>
+        <p class="subtitle" data-i18n="send_secret_message">Send a secret one-time read only message</p>
         <form id="secretform" action="/no-internet" method="POST" enctype="multipart/form-data">
           <div class="input-field">
-            Upload Secret File: <input id='file-input' type="file" name="file" size=25><br>
-            <textarea id="textarea1" name="msg" placeholder="Paste your message here" required></textarea>
+            <span data-i18n="upload_file">Upload Secret File:</span>
+            <div class="custom-file-input">
+              <input id='file-input' type="file" name="file" size=25 class="hidden-file-input">
+              <label for="file-input" class="file-label">
+                <span class="file-button" data-i18n="choose_file">Choose File</span>
+                <span class="file-name" data-i18n="no_file_chosen">No file chosen</span>
+              </label>
+            </div>
+            <textarea id="textarea1" name="msg" data-i18n="paste_message" placeholder="Paste your message here" required></textarea>
           </div>
           <div class="ttl">
-            Time to expire: 
+            <span data-i18n="time_to_expire">Time to expire:</span>
             <select name="ttl" id="ttl">
-              <option value="24h">24h</option>
-              <option value="48h" selected>48h</option>
-              <option value="168h">week</option>
+              <option value="24h" data-i18n="24h">24h</option>
+              <option value="48h" selected data-i18n="48h">48h</option>
+              <option value="168h" data-i18n="week">week</option>
             </select>
           </div>
           <div class="button_wrapper">
-            <button class="encrypt" type="submit" name="action">Submit
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 268.832 268.832"><path fill="#FFF" d="M265.17 125.577l-80-80c-4.88-4.88-12.796-4.88-17.677 0-4.882 4.882-4.882 12.796 0 17.678l58.66 58.66H12.5c-6.903 0-12.5 5.598-12.5 12.5 0 6.903 5.597 12.5 12.5 12.5h213.654l-58.66 58.662c-4.88 4.882-4.88 12.796 0 17.678 2.44 2.44 5.64 3.66 8.84 3.66s6.398-1.22 8.84-3.66l79.997-80c4.883-4.882 4.883-12.796 0-17.678z"/></svg>
-            </button>
+            <button class="encrypt" type="submit" name="action" data-i18n="submit_button">Submit</button>
           </div>
         </form>
         <div class="divider"></div>
@@ -51,7 +65,7 @@
             <textarea id="url" class="textarea" readonly></textarea>
           </div>
           <div class="button">
-            <button class="btn clipboard" data-clipboard-target="#url">Copy to Clipboard</button>
+            <button class="btn clipboard" data-clipboard-target="#url" data-i18n="copy_to_clipboard">Copy to Clipboard</button>
           </div>
         </div>
       </div>
@@ -64,7 +78,6 @@
       </div>
     </footer>
     <script type="text/javascript" src="/static/clipboard-2.0.11.min.js"></script>
-    <script type="text/javascript" src="/static/utils.js"></script>
-    <script type="text/javascript" src="/static/index.js"></script>
+    <script type="module" src="/static/index.js"></script>
   </body>
 </html>

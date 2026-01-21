@@ -7,6 +7,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -197,4 +198,122 @@ func healthHandler(ctx echo.Context) error {
 // redirectHandler redirects the root path to the message creation page.
 func redirectHandler(ctx echo.Context) error {
 	return ctx.Redirect(http.StatusPermanentRedirect, "/msg")
+}
+
+// isValidLanguage checks if the provided language code is supported.
+func isValidLanguage(lang string) bool {
+	validLanguages := []string{"en", "fr", "es", "de", "it"}
+	for _, valid := range validLanguages {
+		if valid == lang {
+			return true
+		}
+	}
+	return false
+}
+
+// htmlHandler serves HTML files with language preference handling.
+func htmlHandler(ctx echo.Context, path string) error {
+	// Check for language preference in cookie or header
+	lang := ctx.QueryParam("lang")
+	if lang == "" {
+		lang = ctx.Request().Header.Get("Accept-Language")
+		if lang != "" {
+			// Extract primary language (e.g., "en-US,en;q=0.9" -> "en")
+			lang = strings.Split(lang, ",")[0]
+			lang = strings.Split(lang, "-")[0]
+		}
+	}
+
+	// Set default language if none found
+	if lang == "" || !isValidLanguage(lang) {
+		lang = "en"
+	}
+
+	// Pass language to template context
+	ctx.Response().Header().Set("Content-Language", lang)
+	ctx.Response().Header().Set("Cache-Control", "public, max-age=300, must-revalidate")
+	ctx.Response().Header().Set("Vary", "Accept-Encoding")
+	return ctx.File(path)
+}
+
+// indexHandler serves the main message creation HTML page.
+func indexHandler(ctx echo.Context) error {
+	return htmlHandler(ctx, "static/index.html")
+}
+
+// getmsgHandler serves the message retrieval HTML page.
+func getmsgHandler(ctx echo.Context) error {
+	return htmlHandler(ctx, "static/getmsg.html")
+}
+
+// getCleanedPath sanitizes and validates the requested static file path.
+func getCleanedPath(ctx echo.Context) (string, error) {
+	// Get URL path (without query string)
+	urlPath := ctx.Request().URL.Path
+
+	// Remove leading slash and clean
+	path := filepath.Clean(strings.TrimPrefix(urlPath, "/"))
+
+	// Security: ensure path starts with "static/" after cleaning
+	if !strings.HasPrefix(path, "static/") && path != "static" {
+		return "", echo.NewHTTPError(http.StatusForbidden, "access denied")
+	}
+
+	return path, nil
+}
+
+// shortCacheHandler serves static files with short-term (5 minutes) caching headers.
+func shortCacheHandler(ctx echo.Context) error {
+	path, err := getCleanedPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	if strings.HasSuffix(path, ".js") {
+		ctx.Response().Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	} else if strings.HasSuffix(path, ".css") {
+		ctx.Response().Header().Set("Content-Type", "text/css; charset=utf-8")
+	}
+	ctx.Response().Header().Set("Cache-Control", "public, max-age=300, must-revalidate")
+	ctx.Response().Header().Set("Vary", "Accept-Encoding")
+	return ctx.File(path)
+}
+
+// mediumCacheHandler serves static files with medium-term (1 hour) caching headers.
+func mediumCacheHandler(ctx echo.Context) error {
+	path, err := getCleanedPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	if strings.HasSuffix(path, ".json") {
+		ctx.Response().Header().Set("Content-Type", "application/json")
+	}
+	ctx.Response().Header().Set("Cache-Control", "public, max-age=3600, must-revalidate")
+	ctx.Response().Header().Set("Vary", "Accept-Encoding")
+	return ctx.File(path)
+}
+
+// longCacheHandler serves static files with long-term (24 hours) caching headers.
+func longCacheHandler(ctx echo.Context) error {
+	path, err := getCleanedPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	ctx.Response().Header().Set("Cache-Control", "public, max-age=86400, must-revalidate")
+	ctx.Response().Header().Set("Vary", "Accept-Encoding")
+	return ctx.File(path)
+}
+
+// fontCacheHandler serves font files with long-term immutable caching.
+func fontCacheHandler(ctx echo.Context) error {
+	path, err := getCleanedPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	ctx.Response().Header().Set("Cache-Control", "public, max-age=2592000, immutable")
+	ctx.Response().Header().Set("Vary", "Accept-Encoding")
+	return ctx.File(path)
 }
