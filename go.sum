@@ -656,8 +656,8 @@ github.com/hashicorp/raft-wal v0.4.0 h1:oHCQLPa3gBTrfuBVHaDg2b/TVXpU0RIyeH/mU9ov
 github.com/hashicorp/raft-wal v0.4.0/go.mod h1:A6vP5o8hGOs1LHfC1Okh9xPwWDcmb6Vvuz/QyqUXlOE=
 github.com/hashicorp/serf v0.10.1 h1:Z1H2J60yRKvfDYAOZLd2MU0ND4AH/WDz7xYHDWQsIPY=
 github.com/hashicorp/serf v0.10.1/go.mod h1:yL2t6BqATOLGc5HF7qbFkTfXoPIY0WZdWHfEvMqbG+4=
-github.com/hashicorp/vault v1.21.2 h1:t6/vAAhgGvKukkIAQBUPenvfLiJ5oUm8CmOMa6tgUYQ=
-github.com/hashicorp/vault v1.21.2/go.mod h1:mjP/x4G0ueDLcOetPYypOmAIn+ofFDcahAX4LXaTH9c=
+github.com/hashicorp/vault v1.21.3 h1:tFlQSTiG7xD3vwxZytDiBUqJ7SUAg3nCOeALxknVUws=
+github.com/hashicorp/vault v1.21.3/go.mod h1:J46xl2AHNc3hebMbY6cmEBkeIJb75CoK3948L2RRKRc=
 github.com/hashicorp/vault-plugin-auth-alicloud v0.22.0 h1:lukm7hwIDQfDyG6IyvBu2tcT6j2bRuyyo22sWqH4w50=
 github.com/hashicorp/vault-plugin-auth-alicloud v0.22.0/go.mod h1:QCuzE/JFqigUf4DyyWyYKq6bvf2dmRKUW340CTy+HZ0=
 github.com/hashicorp/vault-plugin-auth-azure v0.22.0 h1:xvRYu2Xirn6gl/GvhPei7DJgJDDTEvsxxEHkBxuj/Iw=
@@ -708,8 +708,8 @@ github.com/hashicorp/vault-plugin-secrets-terraform v0.13.0 h1:Rhahoi3L1dnZjNqlb
 github.com/hashicorp/vault-plugin-secrets-terraform v0.13.0/go.mod h1:N1fdq0KpTbK/S4Yc4I04JqJ64+mkya4SZ+ychIYd3E4=
 github.com/hashicorp/vault/api v1.22.0 h1:+HYFquE35/B74fHoIeXlZIP2YADVboaPjaSicHEZiH0=
 github.com/hashicorp/vault/api v1.22.0/go.mod h1:IUZA2cDvr4Ok3+NtK2Oq/r+lJeXkeCrHRmqdyWfpmGM=
-github.com/hashicorp/vault/sdk v0.20.0 h1:a4ulj2gICzw/qH0A4+6o36qAHxkUdcmgpMaSSjqE3dc=
-github.com/hashicorp/vault/sdk v0.20.0/go.mod h1:xEjAt/n/2lHBAkYiRPRmvf1d5B6HlisPh2pELlRCosk=
+github.com/hashicorp/vault/sdk v0.21.0 h1:3gDqdKLhHY2ekmCEE9EeesoNpgsReq2bo/SpMqvBYdw=
+github.com/hashicorp/vault/sdk v0.21.0/go.mod h1:BkJpVju7qe2cDe+T8gA84uFtRnNYQIPXkiJqqWGUYrc=
 github.com/hashicorp/vic v1.5.1-0.20190403131502-bbfe86ec9443 h1:O/pT5C1Q3mVXMyuqg7yuAWUg/jMZR1/0QTzTRdNR6Uw=
 github.com/hashicorp/vic v1.5.1-0.20190403131502-bbfe86ec9443/go.mod h1:bEpDU35nTu0ey1EXjwNwPjI9xErAsoOCmcMb9GKvyxo=
 github.com/hashicorp/yamux v0.1.2 h1:XtB8kyFOyHXYVFnwT5C3+Bdo8gArse7j2AQ0DA0Uey8=
