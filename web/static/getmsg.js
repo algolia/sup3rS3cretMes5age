@@ -6,23 +6,31 @@
  * with automatic base64 decoding. All event handlers are CSP-compliant.
  */
 
-// Initialize clipboard functionality
+import { $, setupLanguage } from './utils.js';
+
+// Initialize clipboard and language manager on DOMContentLoaded
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize clipboard functionality
     new ClipboardJS('.btn');
+
+    // Initialize language manager
+    setupLanguage();
 });
 
-// slider.oninput
+// Slider input handler
 document.getElementById("myRange").addEventListener('input', function() {
     if (this.value === '100') { // slider.value returns string
         showSecret();
     }
 });
 
-document.querySelector('.encrypt[name="newMsg"]').addEventListener('click', function() {
+// New message button handler
+$('.encrypt[name="newMsg"]').addEventListener('click', function() {
     // Use relative path to avoid open redirect warnings
     window.location.href = '/';
 });
 
+// Validate and construct secret URL from token
 function validateSecretUrl(token) {
     // Validate token format
     if (!token || typeof token !== 'string' || !/^[A-Za-z0-9_\-\.]+$/.test(token)) {
@@ -37,6 +45,7 @@ function validateSecretUrl(token) {
     return url.toString();
 }
 
+// Fetch and display the secret message
 function showSecret() {
     const params = (new URL(window.location)).searchParams;
 
@@ -64,6 +73,7 @@ function showSecret() {
     });
 };
 
+// Display the secret message and handle file download if applicable
 function showMsg(msg, filetoken, filename) {
     // Hide progress bar if it exists
     const pbar = $('#pbar');
@@ -103,6 +113,7 @@ function showMsg(msg, filetoken, filename) {
     document.getElementById("myRange").value = 0;
 }
 
+// Fetch the secret file and trigger download
 function getSecret(token, name) {
     const urlStr = validateSecretUrl(token);
     if (!urlStr) {
@@ -134,6 +145,7 @@ var saveData = (function () {
     };
 }());
 
+// Convert base64 string to Blob
 function b64toBlob(b64Data, contentType, sliceSize) {
     sliceSize = sliceSize || 512;
 
