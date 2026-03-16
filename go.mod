@@ -1,6 +1,6 @@
 module github.com/algolia/sup3rS3cretMes5age
 
-go 1.25.3
+go 1.26.1
 
 require (
 	github.com/hashicorp/vault v1.21.2
