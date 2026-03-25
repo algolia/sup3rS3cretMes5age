@@ -7,6 +7,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -307,6 +308,11 @@ func shortCacheHandler(ctx echo.Context) error {
 		return err
 	}
 
+	// Check file existence before setting cache headers to avoid caching error responses
+	if stat, err := os.Stat(path); err != nil || stat.IsDir() {
+		return echo.NewHTTPError(http.StatusNotFound, "file not found")
+	}
+
 	h := ctx.Response().Header()
 	if strings.HasSuffix(path, ".js") {
 		h.Set("Content-Type", "application/javascript; charset=utf-8")
@@ -325,6 +331,11 @@ func mediumCacheHandler(ctx echo.Context) error {
 		return err
 	}
 
+	// Check file existence before setting cache headers to avoid caching error responses
+	if stat, err := os.Stat(path); err != nil || stat.IsDir() {
+		return echo.NewHTTPError(http.StatusNotFound, "file not found")
+	}
+
 	h := ctx.Response().Header()
 	if strings.HasSuffix(path, ".json") {
 		h.Set("Content-Type", "application/json")
@@ -341,6 +352,11 @@ func longCacheHandler(ctx echo.Context) error {
 		return err
 	}
 
+	// Check file existence before setting cache headers to avoid caching error responses
+	if stat, err := os.Stat(path); err != nil || stat.IsDir() {
+		return echo.NewHTTPError(http.StatusNotFound, "file not found")
+	}
+
 	h := ctx.Response().Header()
 	h.Set("Cache-Control", "public, max-age=86400, must-revalidate")
 	addToVaryHeader(h, "Accept-Encoding")
@@ -352,6 +368,11 @@ func fontCacheHandler(ctx echo.Context) error {
 	path, err := getCleanedPath(ctx)
 	if err != nil {
 		return err
+	}
+
+	// Check file existence before setting cache headers to avoid caching error responses
+	if stat, err := os.Stat(path); err != nil || stat.IsDir() {
+		return echo.NewHTTPError(http.StatusNotFound, "file not found")
 	}
 
 	h := ctx.Response().Header()
