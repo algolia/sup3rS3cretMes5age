@@ -186,12 +186,17 @@ func (s SecretHandlers) GetMsgHandler(ctx echo.Context) error {
 	r := &MsgResponse{
 		Msg: m,
 	}
+
+	h := ctx.Response().Header()
+	addToVaryHeader(h, "Accept-Encoding")
+	h.Set("Cache-Control", "no-store")
 	return ctx.JSON(http.StatusOK, r)
 }
 
 // healthHandler provides a simple health check endpoint.
 // Returns HTTP 200 OK when the application is running.
 func healthHandler(ctx echo.Context) error {
+	addToVaryHeader(ctx.Response().Header(), "Accept-Encoding")
 	return ctx.String(http.StatusOK, http.StatusText(http.StatusOK))
 }
 
@@ -209,6 +214,23 @@ func isValidLanguage(lang string) bool {
 		}
 	}
 	return false
+}
+
+func addToVaryHeader(h http.Header, value string) {
+	existing := h.Get("Vary")
+	if existing == "" {
+		h.Set("Vary", value)
+		return
+	}
+
+	for _, v := range strings.Split(existing, ",") {
+		if strings.TrimSpace(v) == value {
+			// Value already present, nothing to do.
+			return
+		}
+	}
+
+	h.Set("Vary", existing+", "+value)
 }
 
 // htmlHandler serves HTML files with language preference handling.
@@ -230,9 +252,19 @@ func htmlHandler(ctx echo.Context, path string) error {
 	}
 
 	// Pass language to template context
-	ctx.Response().Header().Set("Content-Language", lang)
-	ctx.Response().Header().Set("Cache-Control", "public, max-age=300, must-revalidate")
-	ctx.Response().Header().Set("Vary", "Accept-Encoding")
+	h := ctx.Response().Header()
+	h.Set("Content-Language", lang)
+
+	// Set caching headers: disable storage for getmsg.html with token, public for others
+	if path == "static/getmsg.html" && ctx.QueryParam("token") != "" {
+		h.Set("Cache-Control", "no-store, private")
+	} else {
+		h.Set("Cache-Control", "public, max-age=300, must-revalidate")
+	}
+
+	addToVaryHeader(h, "Accept-Encoding")
+	addToVaryHeader(h, "Accept-Language")
+
 	return ctx.File(path)
 }
 
@@ -269,13 +301,14 @@ func shortCacheHandler(ctx echo.Context) error {
 		return err
 	}
 
+	h := ctx.Response().Header()
 	if strings.HasSuffix(path, ".js") {
-		ctx.Response().Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		h.Set("Content-Type", "application/javascript; charset=utf-8")
 	} else if strings.HasSuffix(path, ".css") {
-		ctx.Response().Header().Set("Content-Type", "text/css; charset=utf-8")
+		h.Set("Content-Type", "text/css; charset=utf-8")
 	}
-	ctx.Response().Header().Set("Cache-Control", "public, max-age=300, must-revalidate")
-	ctx.Response().Header().Set("Vary", "Accept-Encoding")
+	h.Set("Cache-Control", "public, max-age=300, must-revalidate")
+	addToVaryHeader(h, "Accept-Encoding")
 	return ctx.File(path)
 }
 
@@ -286,11 +319,12 @@ func mediumCacheHandler(ctx echo.Context) error {
 		return err
 	}
 
+	h := ctx.Response().Header()
 	if strings.HasSuffix(path, ".json") {
-		ctx.Response().Header().Set("Content-Type", "application/json")
+		h.Set("Content-Type", "application/json")
 	}
-	ctx.Response().Header().Set("Cache-Control", "public, max-age=3600, must-revalidate")
-	ctx.Response().Header().Set("Vary", "Accept-Encoding")
+	h.Set("Cache-Control", "public, max-age=3600, must-revalidate")
+	addToVaryHeader(h, "Accept-Encoding")
 	return ctx.File(path)
 }
 
@@ -301,8 +335,9 @@ func longCacheHandler(ctx echo.Context) error {
 		return err
 	}
 
-	ctx.Response().Header().Set("Cache-Control", "public, max-age=86400, must-revalidate")
-	ctx.Response().Header().Set("Vary", "Accept-Encoding")
+	h := ctx.Response().Header()
+	h.Set("Cache-Control", "public, max-age=86400, must-revalidate")
+	addToVaryHeader(h, "Accept-Encoding")
 	return ctx.File(path)
 }
 
@@ -313,7 +348,8 @@ func fontCacheHandler(ctx echo.Context) error {
 		return err
 	}
 
-	ctx.Response().Header().Set("Cache-Control", "public, max-age=2592000, immutable")
-	ctx.Response().Header().Set("Vary", "Accept-Encoding")
+	h := ctx.Response().Header()
+	h.Set("Cache-Control", "public, max-age=2592000, immutable")
+	addToVaryHeader(h, "Accept-Encoding")
 	return ctx.File(path)
 }
