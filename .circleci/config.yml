@@ -4,6 +4,9 @@ executors:
   golang:
     docker:
       - image: cimg/go:1.26
+  node:
+    docker:
+      - image: cimg/node:25.8
 
 jobs:
   lint:
@@ -53,10 +56,23 @@ jobs:
       - save_cache:
           <<: *save-cache
 
+  jslint:
+    executor: node
+    steps:
+      - checkout
+      - run:
+          name: Install ESLint
+          command: npm install eslint
+      - run:
+          name: Lint JavaScript
+          command: |
+            npx eslint --config eslint.config.js
+
 workflows:
   lint_test:
     jobs:
       - lint
+      - jslint
       - test:
           requires:
             - lint
