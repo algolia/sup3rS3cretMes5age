@@ -295,8 +295,8 @@ func getCleanedPath(ctx echo.Context) (string, error) {
 	return path, nil
 }
 
-// shortCacheHandler serves static files with short-term (5 minutes) caching headers.
-func shortCacheHandler(ctx echo.Context) error {
+// commonCacheHandler serves static files with specified Cache-Control headers.
+func commonCacheHandler(ctx echo.Context, cacheControl string) error {
 	path, err := getCleanedPath(ctx)
 	if err != nil {
 		return err
@@ -308,69 +308,36 @@ func shortCacheHandler(ctx echo.Context) error {
 	}
 
 	h := ctx.Response().Header()
+
 	if strings.HasSuffix(path, ".js") {
 		h.Set("Content-Type", "application/javascript; charset=utf-8")
 	} else if strings.HasSuffix(path, ".css") {
 		h.Set("Content-Type", "text/css; charset=utf-8")
+	} else if strings.HasSuffix(path, ".json") {
+		h.Set("Content-Type", "application/json")
 	}
-	h.Set("Cache-Control", "public, max-age=300, must-revalidate")
+
+	h.Set("Cache-Control", cacheControl)
 	addToVaryHeader(h, "Accept-Encoding")
 	return ctx.File(path)
+}
+
+// shortCacheHandler serves static files with short-term (5 minutes) caching headers.
+func shortCacheHandler(ctx echo.Context) error {
+	return commonCacheHandler(ctx, "public, max-age=300, must-revalidate")
 }
 
 // mediumCacheHandler serves static files with medium-term (1 hour) caching headers.
 func mediumCacheHandler(ctx echo.Context) error {
-	path, err := getCleanedPath(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Check file existence before setting cache headers to avoid caching error responses
-	if stat, err := os.Stat(path); err != nil || stat.IsDir() {
-		return echo.NewHTTPError(http.StatusNotFound, "file not found")
-	}
-
-	h := ctx.Response().Header()
-	if strings.HasSuffix(path, ".json") {
-		h.Set("Content-Type", "application/json")
-	}
-	h.Set("Cache-Control", "public, max-age=3600, must-revalidate")
-	addToVaryHeader(h, "Accept-Encoding")
-	return ctx.File(path)
+	return commonCacheHandler(ctx, "public, max-age=3600, must-revalidate")
 }
 
 // longCacheHandler serves static files with long-term (24 hours) caching headers.
 func longCacheHandler(ctx echo.Context) error {
-	path, err := getCleanedPath(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Check file existence before setting cache headers to avoid caching error responses
-	if stat, err := os.Stat(path); err != nil || stat.IsDir() {
-		return echo.NewHTTPError(http.StatusNotFound, "file not found")
-	}
-
-	h := ctx.Response().Header()
-	h.Set("Cache-Control", "public, max-age=86400, must-revalidate")
-	addToVaryHeader(h, "Accept-Encoding")
-	return ctx.File(path)
+	return commonCacheHandler(ctx, "public, max-age=86400, must-revalidate")
 }
 
 // fontCacheHandler serves font files with long-term immutable caching.
 func fontCacheHandler(ctx echo.Context) error {
-	path, err := getCleanedPath(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Check file existence before setting cache headers to avoid caching error responses
-	if stat, err := os.Stat(path); err != nil || stat.IsDir() {
-		return echo.NewHTTPError(http.StatusNotFound, "file not found")
-	}
-
-	h := ctx.Response().Header()
-	h.Set("Cache-Control", "public, max-age=2592000, immutable")
-	addToVaryHeader(h, "Accept-Encoding")
-	return ctx.File(path)
+	return commonCacheHandler(ctx, "public, max-age=2592000, immutable")
 }
