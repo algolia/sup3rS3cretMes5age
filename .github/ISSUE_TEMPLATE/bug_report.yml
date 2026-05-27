@@ -1,0 +1,85 @@
+name: Bug report
+description: Report a reproducible problem in sup3rS3cretMes5age
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve sup3rS3cretMes5age.
+        Please provide as much detail as possible to help us reproduce and fix the issue quickly.
+
+        If this is a security vulnerability, do not create a public issue.
+        Please follow [SECURITY.md](../../SECURITY.md) and report it privately.
+
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: Current behavior
+      description: What is happening right now?
+      placeholder: A concise description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Please include a minimal reproducible case.
+      placeholder: |
+        1. Start the service with ...
+        2. Send request ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs-errors
+    attributes:
+      label: Logs, errors, or screenshots
+      description: Paste relevant output, stack traces, or screenshots.
+      render: shell
+
+  - type: input
+    id: go-version
+    attributes:
+      label: Go version
+      placeholder: e.g. go1.26.1
+    validations:
+      required: true
+
+  - type: input
+    id: docker-version
+    attributes:
+      label: Docker version
+      placeholder: e.g. Docker version 28.x
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: e.g. Ubuntu 24.04, macOS 15
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add anything else that may help (config/env vars, related issues, etc.).
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I can reproduce this issue with the steps provided above.
+          required: true
