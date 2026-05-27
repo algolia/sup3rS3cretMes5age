@@ -6,6 +6,7 @@ package internal
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -229,10 +230,51 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 		},
 	}))
 
-	// do not log the /health endpoint
-	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{
+	// Keep the previous JSON access log format while moving off deprecated Logger middleware.
+	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		Skipper: func(c echo.Context) bool {
 			return c.Path() == "/health"
+		},
+		LogRemoteIP:      true,
+		LogHost:          true,
+		LogMethod:        true,
+		LogURI:           true,
+		LogUserAgent:     true,
+		LogStatus:        true,
+		LogError:         true,
+		LogLatency:       true,
+		LogContentLength: true,
+		LogResponseSize:  true,
+		LogRequestID:     true,
+		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			logEntry := map[string]any{
+				"time":          v.StartTime.UTC().Format(time.RFC3339Nano),
+				"id":            v.RequestID,
+				"remote_ip":     v.RemoteIP,
+				"host":          v.Host,
+				"method":        v.Method,
+				"uri":           v.URI,
+				"user_agent":    v.UserAgent,
+				"status":        v.Status,
+				"error":         "",
+				"latency":       v.Latency.Nanoseconds(),
+				"latency_human": v.Latency.String(),
+				"bytes_in":      v.ContentLength,
+				"bytes_out":     v.ResponseSize,
+			}
+
+			if v.Error != nil {
+				logEntry["error"] = v.Error.Error()
+			}
+
+			payload, err := json.Marshal(logEntry)
+			if err != nil {
+				return err
+			}
+
+			payload = append(payload, '\n')
+			_, err = e.Logger.Output().Write(payload)
+			return err
 		},
 	}))
 
