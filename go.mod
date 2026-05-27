@@ -5,7 +5,7 @@ go 1.26.1
 require (
 	github.com/hashicorp/vault v1.21.2
 	github.com/hashicorp/vault/api v1.23.0
-	github.com/labstack/echo/v4 v4.13.4
+	github.com/labstack/echo/v4 v4.15.2
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.52.0
 )
@@ -212,7 +212,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
-	github.com/labstack/gommon v0.4.2 // indirect
+	github.com/labstack/gommon v0.5.0 // indirect
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.2 // indirect
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
@@ -223,7 +223,7 @@ require (
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/miekg/dns v1.1.50 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
@@ -304,7 +304,7 @@ require (
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
-	golang.org/x/time v0.13.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 	google.golang.org/api v0.251.0 // indirect
 	google.golang.org/genproto v0.0.0-20251002232023-7c0ddcbb5797 // indirect
