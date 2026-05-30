@@ -7,6 +7,8 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -185,16 +187,157 @@ func (s SecretHandlers) GetMsgHandler(ctx echo.Context) error {
 	r := &MsgResponse{
 		Msg: m,
 	}
+
+	h := ctx.Response().Header()
+	addToVaryHeader(h, "Accept-Encoding")
+	h.Set("Cache-Control", "no-store")
 	return ctx.JSON(http.StatusOK, r)
 }
 
 // healthHandler provides a simple health check endpoint.
 // Returns HTTP 200 OK when the application is running.
 func healthHandler(ctx echo.Context) error {
+	addToVaryHeader(ctx.Response().Header(), "Accept-Encoding")
 	return ctx.String(http.StatusOK, http.StatusText(http.StatusOK))
 }
 
 // redirectHandler redirects the root path to the message creation page.
 func redirectHandler(ctx echo.Context) error {
 	return ctx.Redirect(http.StatusPermanentRedirect, "/msg")
+}
+
+// isValidLanguage checks if the provided language code is supported.
+func isValidLanguage(lang string) bool {
+	validLanguages := []string{"en", "fr", "es", "de", "it"}
+	for _, valid := range validLanguages {
+		if valid == lang {
+			return true
+		}
+	}
+	return false
+}
+
+func addToVaryHeader(h http.Header, value string) {
+	existing := h.Get("Vary")
+	if existing == "" {
+		h.Set("Vary", value)
+		return
+	}
+
+	for _, v := range strings.Split(existing, ",") {
+		if strings.TrimSpace(v) == value {
+			// Value already present, nothing to do.
+			return
+		}
+	}
+
+	h.Set("Vary", existing+", "+value)
+}
+
+// htmlHandler serves HTML files with language preference handling.
+func htmlHandler(ctx echo.Context, path string) error {
+	// Check for language preference in query parameter or header
+	lang := ctx.QueryParam("lang")
+	if lang == "" {
+		lang = ctx.Request().Header.Get("Accept-Language")
+		if lang != "" {
+			// Extract primary language (e.g., "en-US,en;q=0.9" -> "en")
+			lang = strings.Split(lang, ",")[0]
+			lang = strings.Split(lang, "-")[0]
+		}
+	}
+
+	// Set default language if none found
+	if lang == "" || !isValidLanguage(lang) {
+		lang = "en"
+	}
+
+	// Pass language to template context
+	h := ctx.Response().Header()
+	h.Set("Content-Language", lang)
+
+	// Set caching headers: disable storage for getmsg.html with token, public for others
+	if path == "static/getmsg.html" && ctx.QueryParam("token") != "" {
+		h.Set("Cache-Control", "no-store, private")
+	} else {
+		h.Set("Cache-Control", "public, max-age=300, must-revalidate")
+	}
+
+	addToVaryHeader(h, "Accept-Encoding")
+	addToVaryHeader(h, "Accept-Language")
+
+	return ctx.File(path)
+}
+
+// indexHandler serves the main message creation HTML page.
+func indexHandler(ctx echo.Context) error {
+	return htmlHandler(ctx, "static/index.html")
+}
+
+// getmsgHandler serves the message retrieval HTML page.
+func getmsgHandler(ctx echo.Context) error {
+	return htmlHandler(ctx, "static/getmsg.html")
+}
+
+// getCleanedPath sanitizes and validates the requested static file path.
+func getCleanedPath(ctx echo.Context) (string, error) {
+	// Get URL path (without query string)
+	urlPath := ctx.Request().URL.Path
+
+	// Remove leading slash and clean
+	path := filepath.Clean(strings.TrimPrefix(urlPath, "/"))
+
+	// Security: ensure path starts with "static/" after cleaning
+	if !strings.HasPrefix(path, "static/") && path != "static" {
+		return "", echo.NewHTTPError(http.StatusForbidden, "access denied")
+	}
+
+	return path, nil
+}
+
+// commonCacheHandler serves static files with specified Cache-Control headers.
+func commonCacheHandler(ctx echo.Context, cacheControl string) error {
+	path, err := getCleanedPath(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Check file existence before setting cache headers to avoid caching error responses
+	if stat, err := os.Stat(path); err != nil || stat.IsDir() {
+		return echo.NewHTTPError(http.StatusNotFound, "file not found")
+	}
+
+	h := ctx.Response().Header()
+
+	if strings.HasSuffix(path, ".js") {
+		h.Set("Content-Type", "application/javascript; charset=utf-8")
+	} else if strings.HasSuffix(path, ".css") {
+		h.Set("Content-Type", "text/css; charset=utf-8")
+	} else if strings.HasSuffix(path, ".json") {
+		h.Set("Content-Type", "application/json")
+	}
+
+	h.Set("Cache-Control", cacheControl)
+	addToVaryHeader(h, "Accept-Encoding")
+	return ctx.File(path)
+}
+
+// shortCacheHandler serves static files with short-term (5 minutes) caching headers.
+func shortCacheHandler(ctx echo.Context) error {
+	return commonCacheHandler(ctx, "public, max-age=300, must-revalidate")
+}
+
+// mediumCacheHandler serves static files with medium-term (1 hour) caching headers.
+func mediumCacheHandler(ctx echo.Context) error {
+	return commonCacheHandler(ctx, "public, max-age=3600, must-revalidate")
+}
+
+// longCacheHandler serves static files with long-term (24 hours) caching headers.
+func longCacheHandler(ctx echo.Context) error {
+	return commonCacheHandler(ctx, "public, max-age=86400, must-revalidate")
+}
+
+// fontCacheHandler serves font files with long-term immutable caching.
+func fontCacheHandler(ctx echo.Context) error {
+	return commonCacheHandler(ctx, "public, max-age=2592000, immutable")
 }

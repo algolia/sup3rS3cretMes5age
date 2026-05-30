@@ -3,17 +3,6 @@ FROM golang:1.26 AS builder
 WORKDIR /go/src/github.com/algolia/sup3rS3cretMes5age
 
 ARG VERSION
-ARG BUILD_DATE
-ARG VCS_REF
-
-# Add security-related labels
-LABEL org.opencontainers.image.title="sup3rS3cretMes5age" \
-      org.opencontainers.image.description="Secure self-destructing message service" \
-      org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.created="${BUILD_DATE}" \
-      org.opencontainers.image.revision="${VCS_REF}" \
-      org.opencontainers.image.vendor="Algolia" \
-      org.opencontainers.image.licenses="MIT"
 
 COPY . .
 
@@ -26,8 +15,53 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
     -o /tmp/sup3rS3cretMes5age \
     cmd/sup3rS3cretMes5age/main.go
 
+# Web assets minification stage
+FROM node:25.8.1-alpine AS web-builder
+WORKDIR /app
+COPY web/ ./
+
+# Minify JS and CSS files
+RUN npm install -g @node-minify/cli@10 \
+    @node-minify/terser@10 \
+    @node-minify/lightningcss@10 \
+    @node-minify/html-minifier@10 \
+    @node-minify/jsonminify@10 && \
+    cd static && \
+    for fi in utils.js index.js getmsg.js; \
+    do \
+      node-minify --compressor terser --input "$fi" --output "min.$fi" && mv "min.$fi" "$fi"; \
+    done && \
+    for fi in *.html; \
+    do \
+      node-minify --compressor html-minifier --input "$fi" --output "min.$fi" && mv "min.$fi" "$fi"; \
+    done && \
+    node-minify --compressor lightningcss --input application.css --output min.application.css && mv min.application.css application.css && \
+    ls -l && \
+    cd locales && \
+    for fi in *.json; \
+    do \
+      node-minify --compressor jsonminify --input "$fi" --output "min.$fi" && mv "min.$fi" "$fi"; \
+    done && \
+    ls -l
+
 # Multi-stage build with security hardening
 FROM alpine:latest
+
+ARG VERSION
+ARG BUILD_DATE
+ARG VCS_REF
+
+# Add security-related labels
+LABEL org.opencontainers.image.title="sup3rS3cretMes5age" \
+  org.opencontainers.image.description="Secure self-destructing message service" \
+  org.opencontainers.image.version="${VERSION}" \
+  org.opencontainers.image.created="${BUILD_DATE}" \
+  org.opencontainers.image.revision="${VCS_REF}" \
+  org.opencontainers.image.vendor="Algolia" \
+  org.opencontainers.image.licenses="MIT" \
+  org.opencontainers.image.url="https://github.com/algolia/sup3rS3cretMes5age" \
+  org.opencontainers.image.source="https://github.com/algolia/sup3rS3cretMes5age"
+
 
 # Install only necessary certificates and packages
 RUN apk add --no-cache \
@@ -45,11 +79,11 @@ WORKDIR /opt/supersecret
 
 # Copy binary and static assets
 COPY --from=builder --chown=supersecret:supersecret /tmp/sup3rS3cretMes5age ./sup3rS3cretMes5age
-COPY --chown=supersecret:supersecret web/static/ ./static/
+COPY --from=web-builder --chown=supersecret:supersecret /app/static ./static
 
 # Set proper file permissions
 RUN chmod 755 ./sup3rS3cretMes5age \
-    && chmod 644 ./static/* \
+    && find ./static -type f -exec chmod 644 {} \; \
     && find ./static -type d -exec chmod 755 {} \;
 
 # Define environment variables
