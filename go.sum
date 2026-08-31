@@ -715,8 +715,8 @@ github.com/hashicorp/vault-plugin-secrets-terraform v0.13.0 h1:Rhahoi3L1dnZjNqlb
 github.com/hashicorp/vault-plugin-secrets-terraform v0.13.0/go.mod h1:N1fdq0KpTbK/S4Yc4I04JqJ64+mkya4SZ+ychIYd3E4=
 github.com/hashicorp/vault/api v1.23.0 h1:gXgluBsSECfRWTSW9niY2jwg2e9mMJc4WoHNv4g3h6A=
 github.com/hashicorp/vault/api v1.23.0/go.mod h1:zransKiB9ftp+kgY8ydjnvCU7Wk8i9L0DYWpXeMj9ko=
-github.com/hashicorp/vault/sdk v0.21.0 h1:3gDqdKLhHY2ekmCEE9EeesoNpgsReq2bo/SpMqvBYdw=
-github.com/hashicorp/vault/sdk v0.21.0/go.mod h1:BkJpVju7qe2cDe+T8gA84uFtRnNYQIPXkiJqqWGUYrc=
+github.com/hashicorp/vault/sdk v0.20.0 h1:a4ulj2gICzw/qH0A4+6o36qAHxkUdcmgpMaSSjqE3dc=
+github.com/hashicorp/vault/sdk v0.20.0/go.mod h1:xEjAt/n/2lHBAkYiRPRmvf1d5B6HlisPh2pELlRCosk=
 github.com/hashicorp/vic v1.5.1-0.20190403131502-bbfe86ec9443 h1:O/pT5C1Q3mVXMyuqg7yuAWUg/jMZR1/0QTzTRdNR6Uw=
 github.com/hashicorp/vic v1.5.1-0.20190403131502-bbfe86ec9443/go.mod h1:bEpDU35nTu0ey1EXjwNwPjI9xErAsoOCmcMb9GKvyxo=
 github.com/hashicorp/yamux v0.1.2 h1:XtB8kyFOyHXYVFnwT5C3+Bdo8gArse7j2AQ0DA0Uey8=
