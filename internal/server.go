@@ -137,11 +137,10 @@ func (s *Server) startHTTPS() error {
 		IdleTimeout:    120 * time.Second,
 		MaxHeaderBytes: 1 << 20, // 1MB
 		TLSConfig: &tls.Config{
-			GetCertificate:           autoTLSManager.GetCertificate,
-			NextProtos:               []string{acme.ALPNProto},
-			MinVersion:               tls.VersionTLS12,
-			CurvePreferences:         []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.X25519, tls.CurveP256},
-			PreferServerCipherSuites: true,
+			GetCertificate:   autoTLSManager.GetCertificate,
+			NextProtos:       []string{acme.ALPNProto},
+			MinVersion:       tls.VersionTLS12,
+			CurvePreferences: []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.X25519, tls.CurveP256},
 			CipherSuites: []uint16{
 				// TLS 1.2 safe cipher suites
 				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
