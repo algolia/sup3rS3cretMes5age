@@ -57,7 +57,10 @@ export function isValidLanguage(lang) {
 }
 
 // Load translations for the specified language
-// requestId guards against race conditions from rapid language switching
+// requestId guards against race conditions from rapid language switching.
+// Returns the language whose translations were actually applied (which may
+// differ from the requested one if the fetch failed and English was used as
+// fallback), or null when a newer request superseded this one.
 export async function loadTranslations(language, requestId = null) {
   try {
     const response = await fetch(`/static/locales/${language}.json`);
@@ -79,7 +82,7 @@ export async function loadTranslations(language, requestId = null) {
     // Apply translations to current page
     applyTranslations();
 
-    return translations;
+    return language;
   } catch (error) {
     console.error(`Failed to load translations for ${language}:`, error);
     // If English (fallback) also fails, avoid infinite recursion.
@@ -90,7 +93,10 @@ export async function loadTranslations(language, requestId = null) {
       if (!window.translations) {
         window.translations = {};
       }
-      return window.translations;
+      if (requestId !== null && requestId !== translationRequestId) {
+        return null;
+      }
+      return 'en';
     }
     // Fall back to English
     return loadTranslations('en', requestId);
@@ -163,49 +169,58 @@ export async function switchLanguage(newLanguage) {
   // Increment request ID to invalidate any in-flight requests
   const currentRequestId = ++translationRequestId;
 
-  // Update HTML lang attribute for accessibility
-  document.documentElement.setAttribute('lang', newLanguage);
-
-  // Update language selector value
-  const languageSelect = document.getElementById('language-select');
-  if (languageSelect && languageSelect.value !== newLanguage) {
-    languageSelect.value = newLanguage;
-  }
-
-  // Update URL with language parameter
+  // Update URL with language parameter: this records the user's intent, so
+  // a reload retries the requested language even if this attempt falls back.
   const url = new URL(window.location);
   url.searchParams.set('lang', newLanguage);
   window.history.pushState({}, '', url);
 
   // Load translations with request ID to guard against race conditions
-  const result = await loadTranslations(newLanguage, currentRequestId);
+  const appliedLanguage = await loadTranslations(newLanguage, currentRequestId);
 
-  // Only update currentLanguage if the request wasn't superseded
-  if (result !== null && window.langManager) {
-    window.langManager.currentLanguage = newLanguage;
+  // Nothing superseded us: reflect the language actually rendered. If the
+  // fetch failed and English was used as fallback, the UI state must say
+  // English too — otherwise the selector and <html lang> claim a language
+  // that is not displayed.
+  if (appliedLanguage === null) {
+    return;
+  }
+
+  // Update HTML lang attribute for accessibility
+  document.documentElement.setAttribute('lang', appliedLanguage);
+
+  // Update language selector value
+  const languageSelect = document.getElementById('language-select');
+  if (languageSelect && languageSelect.value !== appliedLanguage) {
+    languageSelect.value = appliedLanguage;
+  }
+
+  if (window.langManager) {
+    window.langManager.currentLanguage = appliedLanguage;
   }
 }
 
 // Setup language on initial load
 export async function setupLanguage() {
-  
+
   const currentLanguage = detectLanguage();
 
   // Increment request ID and use it for the initial load to avoid races
   const currentRequestId = ++translationRequestId;
-  const result = await loadTranslations(currentLanguage, currentRequestId);
+  const appliedLanguage = await loadTranslations(currentLanguage, currentRequestId);
 
   // If a newer language request was made while we were loading, abort
-  if (currentRequestId !== translationRequestId || result === null) {
+  if (currentRequestId !== translationRequestId || appliedLanguage === null) {
     return;
   }
 
-  // Set HTML lang attribute and selector value
-  document.documentElement.setAttribute('lang', currentLanguage);
+  // Set HTML lang attribute and selector value from the language actually
+  // rendered (may be the English fallback if the requested one failed)
+  document.documentElement.setAttribute('lang', appliedLanguage);
 
   // Set up global language manager
   window.langManager = {
-    currentLanguage: currentLanguage,
+    currentLanguage: appliedLanguage,
     switchLanguage: switchLanguage,
     translate: function(key) {
       return window.translations?.[key] || key;
@@ -213,11 +228,11 @@ export async function setupLanguage() {
   };
 
   const languageSelect = document.getElementById('language-select');
-  
+
   if (languageSelect) {
     // Ensure selector reflects current language
-    if (languageSelect.value !== currentLanguage) {
-      languageSelect.value = currentLanguage;
+    if (languageSelect.value !== appliedLanguage) {
+      languageSelect.value = appliedLanguage;
     }
     // Add event listener for language selector (CSP-compliant)
     languageSelect.addEventListener('change', function() {
