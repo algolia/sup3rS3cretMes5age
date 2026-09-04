@@ -105,9 +105,10 @@ docker compose -f deploy/docker-compose.yml up --build -d
 
 ### Static Asset Serving and Caching
 - Static files are served with cache tiers:
-  - `/static/fonts/*`: long immutable cache
-  - `/static/icons/*`: long cache
-  - `/static/locales/*`: medium cache
+  - `/static/fonts/*`: 7-day cache (no `immutable`; filenames are unversioned)
+  - `/static/icons/*`: 24-hour cache
+  - `/static/locales/*`: short cache (same 5-minute TTL as HTML pages, so fresh
+    HTML never pairs with stale locale JSON after a deploy)
   - other `/static/*`: short cache
 - HTML pages set `Content-Language` and `Vary: Accept-Language`.
 - `getmsg` with token uses `Cache-Control: no-store, private`.
