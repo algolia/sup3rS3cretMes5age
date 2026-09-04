@@ -1,13 +1,19 @@
 package internal
 
 import (
+	"compress/gzip"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/acme/autocert"
 )
 
@@ -298,4 +304,58 @@ func TestServerGzipCompression(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestGzipRangeRequests verifies that Range requests are not gzip-compressed:
+// compressing a 206 Partial Content response would replace the body with gzip
+// data while Content-Range/Content-Length still describe the identity
+// representation, corrupting any range-capable client's download.
+func TestGzipRangeRequests(t *testing.T) {
+	// Static handlers resolve files relative to the working directory, so run
+	// the test against a temporary "static/" tree.
+	tmp := t.TempDir()
+	t.Chdir(tmp)
+	if err := os.MkdirAll(filepath.Join(tmp, "static", "locales"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := []byte(strings.Repeat("0123456789abcdef", 16)) // 256 bytes, gzip-compressible
+	if err := os.WriteFile(filepath.Join(tmp, "static", "locales", "test.json"), content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+		AllowedOrigins:     []string{"*"},
+	}
+	server := NewServer(cnf, NewSecretHandlers(&FakeSecretMsgStorer{}))
+
+	t.Run("range request is served uncompressed with correct Content-Range", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/static/locales/test.json", nil)
+		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set("Range", "bytes=0-99")
+		rec := httptest.NewRecorder()
+		server.handler().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusPartialContent, rec.Code)
+		assert.Empty(t, rec.Header().Get("Content-Encoding"), "Range responses must not be compressed")
+		assert.Equal(t, "bytes 0-99/256", rec.Header().Get("Content-Range"))
+		assert.Equal(t, content[0:100], rec.Body.Bytes(), "Body must be the exact identity byte range")
+	})
+
+	t.Run("full request is served gzip-compressed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/static/locales/test.json", nil)
+		req.Header.Set("Accept-Encoding", "gzip")
+		rec := httptest.NewRecorder()
+		server.handler().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "gzip", rec.Header().Get("Content-Encoding"), "Response should be gzip compressed")
+
+		zr, err := gzip.NewReader(rec.Body)
+		require.NoError(t, err)
+		decompressed, err := io.ReadAll(zr)
+		require.NoError(t, err)
+		assert.Equal(t, content, decompressed)
+	})
 }
