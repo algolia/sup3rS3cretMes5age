@@ -50,10 +50,43 @@ export function detectLanguage() {
   return 'en';
 }
 
+// Supported languages, initialized from locales-manifest.json (the single
+// source of truth, shared with the server) by setupLanguage. Empty until the
+// manifest loads, so nothing is considered valid before that.
+let supportedLanguages = [];
+
+// Load the language manifest. On failure the list stays empty and every
+// language resolves to the English default — the original HTML text stays
+// visible, matching the locale-fetch failure behavior.
+async function loadLanguageManifest() {
+  try {
+    const response = await fetch('/static/locales-manifest.json');
+    if (!response.ok) {
+      throw new Error(`HTTP error ${response.status} while loading /static/locales-manifest.json`);
+    }
+    const manifest = await response.json();
+    if (Array.isArray(manifest.languages) && manifest.languages.length > 0) {
+      supportedLanguages = manifest.languages;
+    }
+  } catch (error) {
+    console.error('Failed to load language manifest:', error);
+  }
+}
+
+// Native display name for a language code (e.g. "de" -> "Deutsch"), provided
+// by the browser's CLDR data so new languages need no label table.
+function nativeLanguageName(code) {
+  try {
+    const name = new Intl.DisplayNames([code], { type: 'language' }).of(code);
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  } catch {
+    return code.toUpperCase();
+  }
+}
+
 // Validate if the language is supported
 export function isValidLanguage(lang) {
-  const validLanguages = ['en', 'fr', 'de', 'es', 'it'];
-  return validLanguages.includes(lang);
+  return supportedLanguages.includes(lang);
 }
 
 // Load translations for the specified language
@@ -216,6 +249,9 @@ export async function switchLanguage(newLanguage) {
 // Setup language on initial load
 export async function setupLanguage() {
 
+  // Load the language list before detection/translation: it drives both
+  await loadLanguageManifest();
+
   const currentLanguage = detectLanguage();
 
   // Increment request ID and use it for the initial load to avoid races
@@ -243,6 +279,14 @@ export async function setupLanguage() {
   const languageSelect = document.getElementById('language-select');
 
   if (languageSelect) {
+    // Build the selector from the manifest — the same source of truth the
+    // server uses — instead of hardcoded <option> markup.
+    languageSelect.replaceChildren(...supportedLanguages.map(code => {
+      const option = document.createElement('option');
+      option.value = code;
+      option.textContent = nativeLanguageName(code);
+      return option;
+    }));
     // Ensure selector reflects current language
     if (languageSelect.value !== appliedLanguage) {
       languageSelect.value = appliedLanguage;

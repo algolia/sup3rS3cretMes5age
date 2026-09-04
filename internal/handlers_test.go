@@ -4,16 +4,48 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// TestMain points the supported-language list at the real locales directory
+// so tests run against the same source of truth as production startup.
+func TestMain(m *testing.M) {
+	langs, err := loadSupportedLanguages("../web/static/locales")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "test setup: %v\n", err)
+		os.Exit(1)
+	}
+	supportedLanguages = langs
+	os.Exit(m.Run())
+}
+
+// TestLocalesManifestMatchesDirectory fails when a locale file is added or
+// removed without regenerating web/static/locales-manifest.json, which the
+// client uses as its language list.
+func TestLocalesManifestMatchesDirectory(t *testing.T) {
+	langs, err := loadSupportedLanguages("../web/static/locales")
+	require.NoError(t, err)
+
+	data, err := os.ReadFile("../web/static/locales-manifest.json")
+	require.NoError(t, err)
+
+	var manifest struct {
+		Languages []string `json:"languages"`
+	}
+	require.NoError(t, json.Unmarshal(data, &manifest))
+	assert.Equal(t, langs, manifest.Languages)
+}
 
 type FakeSecretMsgStorer struct {
 	msg           string

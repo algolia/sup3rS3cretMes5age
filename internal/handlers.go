@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -207,15 +209,47 @@ func redirectHandler(ctx echo.Context) error {
 	return ctx.Redirect(http.StatusPermanentRedirect, "/msg")
 }
 
+// supportedLanguages holds the UI language codes. It is initialized at
+// startup from the locales directory — the single source of truth — so
+// adding a locale file (plus regenerating locales-manifest.json for the
+// client) is all that is needed to support a new language.
+var supportedLanguages []string
+
+// InitSupportedLanguages derives the supported UI languages from the *.json
+// files in dir. It must be called once at startup, before serving requests.
+func InitSupportedLanguages(dir string) error {
+	langs, err := loadSupportedLanguages(dir)
+	if err != nil {
+		return err
+	}
+	supportedLanguages = langs
+	return nil
+}
+
+// loadSupportedLanguages lists the locale JSON files in dir, sorted.
+func loadSupportedLanguages(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("reading locales directory %s: %w", dir, err)
+	}
+	var langs []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		langs = append(langs, strings.TrimSuffix(name, ".json"))
+	}
+	if len(langs) == 0 {
+		return nil, fmt.Errorf("no locale files found in %s", dir)
+	}
+	sort.Strings(langs)
+	return langs, nil
+}
+
 // isValidLanguage checks if the provided language code is supported.
 func isValidLanguage(lang string) bool {
-	validLanguages := []string{"en", "fr", "es", "de", "it"}
-	for _, valid := range validLanguages {
-		if valid == lang {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(supportedLanguages, lang)
 }
 
 func addToVaryHeader(h http.Header, value string) {
