@@ -1,5 +1,4 @@
 {
-  "title": "sup3rS3cretMes5age",
   "secret_message": "Secret Message",
   "send_secret_message": "Send a secret one-time read only message",
   "paste_message": "Paste your message here",
@@ -18,7 +17,10 @@
   "week": "week",
   "success_message": "Your message has been securely sent!",
   "success_copy": "Click the button below to copy the link to your clipboard",
-  "footer_text": "Powered by sup3rS3cretMes5age",
   "meta_description": "Send self-destructing one-time secret messages securely. Messages are automatically deleted after first read.",
-  "meta_title": "Self Destructing Secure Message"
+  "meta_title": "Self Destructing Secure Message",
+  "invalid_token": "Invalid or missing token",
+  "message_already_deleted": "Message was already deleted :(",
+  "error_creating": "An error occurred while creating the secret message.",
+  "message_placeholder": "Message should appear here"
 }

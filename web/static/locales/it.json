@@ -1,5 +1,4 @@
 {
-  "title": "sup3rS3cretMes5age",
   "secret_message": "Messaggio Segreto",
   "send_secret_message": "Invia un messaggio segreto di sola lettura",
   "paste_message": "Incolla il tuo messaggio qui",
@@ -18,7 +17,10 @@
   "week": "settimana",
   "success_message": "Il tuo messaggio è stato inviato in modo sicuro!",
   "success_copy": "Clicca sul pulsante qui sotto per copiare il link negli appunti",
-  "footer_text": "Offerto da sup3rS3cretMes5age",
   "meta_description": "Invia messaggi segreti di sola lettura che si eliminano automaticamente dopo la prima lettura.",
-  "meta_title": "Messaggio Sicuro Auto-Distruttivo"
+  "meta_title": "Messaggio Sicuro Auto-Distruttivo",
+  "invalid_token": "Token non valido o mancante",
+  "message_already_deleted": "Il messaggio è già stato eliminato :(",
+  "error_creating": "Si è verificato un errore durante la creazione del messaggio segreto.",
+  "message_placeholder": "Il messaggio dovrebbe apparire qui"
 }
