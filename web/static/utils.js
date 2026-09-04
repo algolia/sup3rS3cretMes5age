@@ -103,6 +103,13 @@ export async function loadTranslations(language, requestId = null) {
   }
 }
 
+// Translate a key using the loaded locale. Falls back to the provided
+// default (typically the English string) when translations are missing or
+// not yet loaded, so dynamic strings degrade to content, never key names.
+export function translate(key, fallback) {
+  return window.translations?.[key] || fallback || key;
+}
+
 // Apply translations to the page elements with data-i18n attributes
 export function applyTranslations() {
   // Translate elements with data-i18n attribute

@@ -1,5 +1,4 @@
 {
-  "title": "sup3rS3cretMes5age",
   "secret_message": "Mensaje Secreto",
   "send_secret_message": "Enviar un mensaje secreto de uso único",
   "paste_message": "Pegue su mensaje aquí",
@@ -18,7 +17,10 @@
   "week": "semana",
   "success_message": "¡Su mensaje ha sido enviado de forma segura!",
   "success_copy": "Haga clic en el botón de abajo para copiar el enlace a su portapapeles",
-  "footer_text": "Desarrollado por sup3rS3cretMes5age",
   "meta_description": "Envíe mensajes secretos de uso único que se eliminan automáticamente después de ser leídos.",
-  "meta_title": "Mensaje Seguro Auto-Destruible"
+  "meta_title": "Mensaje Seguro Auto-Destruible",
+  "invalid_token": "Token no válido o ausente",
+  "message_already_deleted": "El mensaje ya fue eliminado :(",
+  "error_creating": "Ocurrió un error al crear el mensaje secreto.",
+  "message_placeholder": "El mensaje debería aparecer aquí"
 }

@@ -6,7 +6,7 @@
  * with automatic base64 decoding. All event handlers are CSP-compliant.
  */
 
-import { $, setupLanguage } from './utils.js';
+import { $, setupLanguage, translate } from './utils.js';
 
 // Initialize clipboard and language manager on DOMContentLoaded
 document.addEventListener('DOMContentLoaded', function() {
@@ -35,7 +35,7 @@ function validateSecretUrl(token) {
     // Validate token format
     if (!token || typeof token !== 'string' || !/^[A-Za-z0-9_\-\.]+$/.test(token)) {
         console.error('Invalid token format');
-        showMsg("Invalid or missing token");
+        showMsg(translate('invalid_token', 'Invalid or missing token'));
         return null;
     }
 
@@ -69,7 +69,7 @@ function showSecret() {
     })
     .catch(error => {
         console.error(`An error occurred: ${error}`);
-        showMsg("Message was already deleted :(");
+        showMsg(translate('message_already_deleted', 'Message was already deleted :('));
     });
 };
 

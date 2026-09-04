@@ -1,5 +1,4 @@
 {
-  "title": "sup3rS3cretMes5age",
   "secret_message": "Message Secret",
   "send_secret_message": "Envoyez un message secret à usage unique",
   "paste_message": "Collez votre message ici",
@@ -18,7 +17,10 @@
   "week": "semaine",
   "success_message": "Votre message a été envoyé en toute sécurité !",
   "success_copy": "Cliquez sur le bouton ci-dessous pour copier le lien dans votre presse-papier",
-  "footer_text": "Propulsé par sup3rS3cretMes5age",
   "meta_description": "Envoyez des messages secrets à usage unique qui disparaissent automatiquement après lecture.",
-  "meta_title": "Message Sécurisé Auto-Détruisant"
+  "meta_title": "Message Sécurisé Auto-Détruisant",
+  "invalid_token": "Jeton invalide ou manquant",
+  "message_already_deleted": "Le message a déjà été supprimé :(",
+  "error_creating": "Une erreur s'est produite lors de la création du message secret.",
+  "message_placeholder": "Le message devrait apparaître ici"
 }
