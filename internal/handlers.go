@@ -328,20 +328,24 @@ func resolveLanguage(langParam, acceptLanguage string) string {
 	return "en"
 }
 
-// htmlHandler serves HTML files with language preference handling.
-func htmlHandler(ctx echo.Context, path string) error {
+// Cache-Control policies for the static cache tiers. shortCacheControl is
+// also shared by the HTML pages, so a deploy's fresh HTML never pairs with
+// stale assets or translations.
+const (
+	shortCacheControl = "public, max-age=300, must-revalidate"
+	iconsCacheControl = "public, max-age=86400, must-revalidate"
+	fontsCacheControl = "public, max-age=604800, must-revalidate"
+)
+
+// htmlHandler serves an HTML file with language preference handling.
+// cacheControl picks the Cache-Control value for each request, since some
+// pages need per-URL decisions (see getmsgHTMLCache).
+func htmlHandler(ctx echo.Context, path string, cacheControl func(echo.Context) string) error {
 	lang := resolveLanguage(ctx.QueryParam("lang"), ctx.Request().Header.Get("Accept-Language"))
 
-	// Pass language to template context
 	h := ctx.Response().Header()
 	h.Set("Content-Language", lang)
-
-	// Set caching headers: disable storage for getmsg.html with token, public for others
-	if path == "static/getmsg.html" && ctx.QueryParam("token") != "" {
-		h.Set("Cache-Control", "no-store, private")
-	} else {
-		h.Set("Cache-Control", "public, max-age=300, must-revalidate")
-	}
+	h.Set("Cache-Control", cacheControl(ctx))
 
 	addToVaryHeader(h, "Accept-Encoding")
 	addToVaryHeader(h, "Accept-Language")
@@ -349,14 +353,28 @@ func htmlHandler(ctx echo.Context, path string) error {
 	return ctx.File(path)
 }
 
+// publicHTMLCache caches HTML pages publicly for 5 minutes.
+func publicHTMLCache(echo.Context) string {
+	return shortCacheControl
+}
+
+// getmsgHTMLCache disables storage for token-bearing URLs: the query string
+// carries a one-time secret token that must not land in shared caches.
+func getmsgHTMLCache(ctx echo.Context) string {
+	if ctx.QueryParam("token") != "" {
+		return "no-store, private"
+	}
+	return shortCacheControl
+}
+
 // indexHandler serves the main message creation HTML page.
 func indexHandler(ctx echo.Context) error {
-	return htmlHandler(ctx, "static/index.html")
+	return htmlHandler(ctx, "static/index.html", publicHTMLCache)
 }
 
 // getmsgHandler serves the message retrieval HTML page.
 func getmsgHandler(ctx echo.Context) error {
-	return htmlHandler(ctx, "static/getmsg.html")
+	return htmlHandler(ctx, "static/getmsg.html", getmsgHTMLCache)
 }
 
 // getCleanedPath sanitizes and validates the requested static file path.
@@ -375,47 +393,33 @@ func getCleanedPath(ctx echo.Context) (string, error) {
 	return path, nil
 }
 
-// commonCacheHandler serves static files with specified Cache-Control headers.
-func commonCacheHandler(ctx echo.Context, cacheControl string) error {
-	path, err := getCleanedPath(ctx)
-	if err != nil {
-		return err
+// cacheHandler returns a static-file handler applying the given Cache-Control
+// policy, so each route's cache tier is visible next to its registration in
+// the route table.
+func cacheHandler(cacheControl string) echo.HandlerFunc {
+	return func(ctx echo.Context) error {
+		path, err := getCleanedPath(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Check file existence before setting cache headers to avoid caching error responses
+		if stat, err := os.Stat(path); err != nil || stat.IsDir() {
+			return echo.NewHTTPError(http.StatusNotFound, "file not found")
+		}
+
+		h := ctx.Response().Header()
+
+		if strings.HasSuffix(path, ".js") {
+			h.Set("Content-Type", "application/javascript; charset=utf-8")
+		} else if strings.HasSuffix(path, ".css") {
+			h.Set("Content-Type", "text/css; charset=utf-8")
+		} else if strings.HasSuffix(path, ".json") {
+			h.Set("Content-Type", "application/json")
+		}
+
+		h.Set("Cache-Control", cacheControl)
+		addToVaryHeader(h, "Accept-Encoding")
+		return ctx.File(path)
 	}
-
-	// Check file existence before setting cache headers to avoid caching error responses
-	if stat, err := os.Stat(path); err != nil || stat.IsDir() {
-		return echo.NewHTTPError(http.StatusNotFound, "file not found")
-	}
-
-	h := ctx.Response().Header()
-
-	if strings.HasSuffix(path, ".js") {
-		h.Set("Content-Type", "application/javascript; charset=utf-8")
-	} else if strings.HasSuffix(path, ".css") {
-		h.Set("Content-Type", "text/css; charset=utf-8")
-	} else if strings.HasSuffix(path, ".json") {
-		h.Set("Content-Type", "application/json")
-	}
-
-	h.Set("Cache-Control", cacheControl)
-	addToVaryHeader(h, "Accept-Encoding")
-	return ctx.File(path)
-}
-
-// shortCacheHandler serves static files with short-term (5 minutes) caching headers.
-func shortCacheHandler(ctx echo.Context) error {
-	return commonCacheHandler(ctx, "public, max-age=300, must-revalidate")
-}
-
-// longCacheHandler serves static files with long-term (24 hours) caching headers.
-func longCacheHandler(ctx echo.Context) error {
-	return commonCacheHandler(ctx, "public, max-age=86400, must-revalidate")
-}
-
-// fontCacheHandler serves font files with week-long caching. The filenames
-// are not content-hashed, so "immutable" would pin an updated font in
-// browsers for the full TTL after a deploy; 7 days bounds the staleness
-// window while keeping revalidation cheap.
-func fontCacheHandler(ctx echo.Context) error {
-	return commonCacheHandler(ctx, "public, max-age=604800, must-revalidate")
 }
