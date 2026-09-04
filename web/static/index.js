@@ -6,7 +6,7 @@
  * All event handlers are CSP-compliant.
  */
 
-import { $, setupLanguage } from './utils.js';
+import { $, setupLanguage, translate } from './utils.js';
 
 // CSS manipulation helper
 function setStyles(element, styles) {
@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', function() {
     })
     .catch(error => {
       console.error(`An error occurred: ${error}`);
-      window.alert('An error occurred while creating the secret message.');
+      window.alert(translate('error_creating', 'An error occurred while creating the secret message.'));
     });
   });
 });

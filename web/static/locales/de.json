@@ -1,5 +1,4 @@
 {
-  "title": "sup3rS3cretMes5age",
   "secret_message": "Geheimnachricht",
   "send_secret_message": "Senden Sie eine geheime Einmal-Nachricht",
   "paste_message": "Fügen Sie Ihre Nachricht hier ein",
@@ -18,7 +17,10 @@
   "week": "Woche",
   "success_message": "Ihre Nachricht wurde sicher gesendet!",
   "success_copy": "Klicken Sie auf die Schaltfläche unten, um den Link in Ihre Zwischenablage zu kopieren",
-  "footer_text": "Unterstützt von sup3rS3cretMes5age",
   "meta_description": "Senden Sie sicher zerstörende Einmalnachrichten. Nachrichten werden automatisch nach dem ersten Lesen gelöscht.",
-  "meta_title": "Selbstzerstörende sichere Nachricht"
+  "meta_title": "Selbstzerstörende sichere Nachricht",
+  "invalid_token": "Ungültiger oder fehlender Token",
+  "message_already_deleted": "Nachricht wurde bereits gelöscht :(",
+  "error_creating": "Beim Erstellen der geheimen Nachricht ist ein Fehler aufgetreten.",
+  "message_placeholder": "Hier sollte die Nachricht erscheinen"
 }
