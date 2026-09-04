@@ -83,11 +83,13 @@ export async function loadTranslations(language, requestId = null) {
   } catch (error) {
     console.error(`Failed to load translations for ${language}:`, error);
     // If English (fallback) also fails, avoid infinite recursion.
+    // Keep whatever translations are already loaded: applyTranslations()
+    // skips keys without a translation, so the original HTML text stays
+    // visible instead of being replaced by raw i18n keys.
     if (language === 'en') {
       if (!window.translations) {
         window.translations = {};
       }
-      applyTranslations();
       return window.translations;
     }
     // Fall back to English
@@ -101,7 +103,14 @@ export function applyTranslations() {
   const elements = $$('[data-i18n]');
   elements.forEach(element => {
     const key = element.getAttribute('data-i18n');
-    const translation = window.translations?.[key] || key;
+    const translation = window.translations?.[key];
+
+    // Skip keys with no translation: writing the raw key would replace
+    // valid content. A missing key degrades gracefully to the original
+    // HTML text (or the previously applied language), never to key names.
+    if (!translation) {
+      return;
+    }
 
     if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
       element.placeholder = translation;
