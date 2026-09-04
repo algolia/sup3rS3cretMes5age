@@ -320,11 +320,13 @@ func setupRoutes(e *echo.Echo, handlers *SecretHandlers) {
 	e.GET("/msg", indexHandler)
 	e.GET("/getmsg", getmsgHandler)
 
-	// Static assets with tiered caching
+	// Static assets with tiered caching. Locales share the short tier so a
+	// deploy's new HTML and translations expire together — a longer locale
+	// TTL would leave browsers pairing fresh HTML with stale JSON.
 	static := e.Group("/static")
 	staticMethods := []string{"GET", "HEAD"}
 	static.Match(staticMethods, "/fonts/*", fontCacheHandler)
 	static.Match(staticMethods, "/icons/*", longCacheHandler)
-	static.Match(staticMethods, "/locales/*", mediumCacheHandler)
+	static.Match(staticMethods, "/locales/*", shortCacheHandler)
 	static.Match(staticMethods, "/*", shortCacheHandler)
 }

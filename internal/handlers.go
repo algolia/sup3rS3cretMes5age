@@ -373,17 +373,15 @@ func shortCacheHandler(ctx echo.Context) error {
 	return commonCacheHandler(ctx, "public, max-age=300, must-revalidate")
 }
 
-// mediumCacheHandler serves static files with medium-term (1 hour) caching headers.
-func mediumCacheHandler(ctx echo.Context) error {
-	return commonCacheHandler(ctx, "public, max-age=3600, must-revalidate")
-}
-
 // longCacheHandler serves static files with long-term (24 hours) caching headers.
 func longCacheHandler(ctx echo.Context) error {
 	return commonCacheHandler(ctx, "public, max-age=86400, must-revalidate")
 }
 
-// fontCacheHandler serves font files with long-term immutable caching.
+// fontCacheHandler serves font files with week-long caching. The filenames
+// are not content-hashed, so "immutable" would pin an updated font in
+// browsers for the full TTL after a deploy; 7 days bounds the staleness
+// window while keeping revalidation cheap.
 func fontCacheHandler(ctx echo.Context) error {
-	return commonCacheHandler(ctx, "public, max-age=2592000, immutable")
+	return commonCacheHandler(ctx, "public, max-age=604800, must-revalidate")
 }

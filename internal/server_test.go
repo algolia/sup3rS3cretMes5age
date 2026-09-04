@@ -359,3 +359,63 @@ func TestGzipRangeRequests(t *testing.T) {
 		assert.Equal(t, content, decompressed)
 	})
 }
+
+// TestStaticCacheTiers pins the per-route Cache-Control policies. Locales
+// must share the short tier with HTML pages so a deploy's fresh markup never
+// pairs with stale locale JSON; fonts must not be immutable because their
+// filenames are not content-hashed.
+func TestStaticCacheTiers(t *testing.T) {
+	tmp := t.TempDir()
+	t.Chdir(tmp)
+	for _, dir := range []string{"locales", "fonts", "icons"} {
+		if err := os.MkdirAll(filepath.Join(tmp, "static", dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, file := range []string{
+		"static/locales/en.json",
+		"static/fonts/test.ttf",
+		"static/icons/test.png",
+	} {
+		if err := os.WriteFile(filepath.Join(tmp, file), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+		AllowedOrigins:     []string{"*"},
+	}
+	server := NewServer(cnf, NewSecretHandlers(&FakeSecretMsgStorer{}))
+
+	tests := []struct {
+		name        string
+		path        string
+		cacheHeader string
+	}{
+		{"locale uses the short tier", "/static/locales/en.json", "public, max-age=300, must-revalidate"},
+		{"font uses the week-long tier without immutable", "/static/fonts/test.ttf", "public, max-age=604800, must-revalidate"},
+		{"icon uses the 24h tier", "/static/icons/test.png", "public, max-age=86400, must-revalidate"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rec := httptest.NewRecorder()
+			server.handler().ServeHTTP(rec, req)
+
+			require.Equal(t, http.StatusOK, rec.Code)
+			assert.Equal(t, tt.cacheHeader, rec.Header().Get("Cache-Control"))
+			assert.NotContains(t, rec.Header().Get("Cache-Control"), "immutable")
+		})
+	}
+
+	t.Run("missing file returns 404 without cache headers", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/static/locales/missing.json", nil)
+		rec := httptest.NewRecorder()
+		server.handler().ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		assert.Empty(t, rec.Header().Get("Cache-Control"), "Error responses must not carry cache headers")
+	})
+}
