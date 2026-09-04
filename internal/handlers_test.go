@@ -33,6 +33,73 @@ func (f *FakeSecretMsgStorer) Store(msg string, ttl string) (token string, err e
 	return f.token, f.err
 }
 
+func TestPrimaryLanguageTag(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"fr", "fr"},
+		{"fr-CA", "fr"},
+		{"fr_CA", "fr"},
+		{"DE", "de"},
+		{"  it  ", "it"},
+		{"*", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.expected, primaryLanguageTag(tt.input), "primaryLanguageTag(%q)", tt.input)
+	}
+}
+
+func TestParseAcceptLanguage(t *testing.T) {
+	tests := []struct {
+		name     string
+		header   string
+		expected string
+	}{
+		{"simple preference", "de", "de"},
+		{"q-values respected", "de;q=0.9,fr;q=0.8", "de"},
+		{"higher q wins regardless of order", "fr;q=0.1,en;q=0.9", "en"},
+		{"bare tag outranks weighted tag", "fr;q=0.5,en", "en"},
+		{"region subtag stripped", "fr-CA,de", "fr"},
+		{"case insensitive", "FR,DE", "fr"},
+		{"unsupported languages ignored", "pt-BR,ja;q=0.9,es;q=0.5", "es"},
+		{"wildcard entries skipped", "*,es;q=0.5", "es"},
+		{"unsupported only yields empty", "pt-BR,ja", ""},
+		{"empty header yields empty", "", ""},
+		{"malformed q ignored, default 1.0 used", "de;q=abc,fr;q=0.2", "de"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, parseAcceptLanguage(tt.header))
+		})
+	}
+}
+
+func TestResolveLanguage(t *testing.T) {
+	tests := []struct {
+		name      string
+		langParam string
+		header    string
+		expected  string
+	}{
+		{"lang param wins", "de", "fr", "de"},
+		{"region param normalized", "fr-CA", "de", "fr"},
+		{"invalid param falls through to header", "pt", "fr", "fr"},
+		{"no param uses header", "", "fr-CA", "fr"},
+		{"q-values parsed from header", "", "de;q=0.9,fr;q=0.8", "de"},
+		{"wildcard falls to default", "", "*", "en"},
+		{"nothing set defaults to en", "", "", "en"},
+		{"uppercase param lowercased", "FR", "", "fr"},
+		{"uppercase header lowercased", "", "DE", "de"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, resolveLanguage(tt.langParam, tt.header))
+		})
+	}
+}
+
 func TestGetMsgHandler(t *testing.T) {
 	tests := []struct {
 		name           string
