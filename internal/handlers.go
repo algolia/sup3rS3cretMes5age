@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -234,23 +235,68 @@ func addToVaryHeader(h http.Header, value string) {
 	h.Set("Vary", existing+", "+value)
 }
 
-// htmlHandler serves HTML files with language preference handling.
-func htmlHandler(ctx echo.Context, path string) error {
-	// Check for language preference in query parameter or header
-	lang := ctx.QueryParam("lang")
-	if lang == "" {
-		lang = ctx.Request().Header.Get("Accept-Language")
-		if lang != "" {
-			// Extract primary language (e.g., "en-US,en;q=0.9" -> "en")
-			lang = strings.Split(lang, ",")[0]
-			lang = strings.Split(lang, "-")[0]
+// primaryLanguageTag normalizes a language tag to its lowercase primary
+// subtag (e.g. "fr-CA" -> "fr"). Returns "" for empty, wildcard or otherwise
+// regionless-unusable tags.
+func primaryLanguageTag(tag string) string {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	if i := strings.IndexAny(tag, "-_"); i != -1 {
+		tag = tag[:i]
+	}
+	if tag == "*" {
+		return ""
+	}
+	return tag
+}
+
+// parseAcceptLanguage extracts the supported language with the highest
+// q-value from an Accept-Language header value (e.g. "fr;q=0.1,en;q=0.9").
+// Tags without an explicit q default to 1.0; "*" entries are ignored.
+// Returns "" when no supported language is listed.
+func parseAcceptLanguage(header string) string {
+	bestLang := ""
+	bestQ := 0.0
+	for _, entry := range strings.Split(header, ",") {
+		parts := strings.Split(entry, ";")
+		lang := primaryLanguageTag(parts[0])
+		if !isValidLanguage(lang) {
+			continue
+		}
+		q := 1.0
+		for _, param := range parts[1:] {
+			param = strings.TrimSpace(param)
+			if strings.HasPrefix(param, "q=") {
+				if parsed, err := strconv.ParseFloat(param[2:], 64); err == nil {
+					q = parsed
+				}
+			}
+		}
+		if q > bestQ {
+			bestLang = lang
+			bestQ = q
 		}
 	}
+	return bestLang
+}
 
-	// Set default language if none found
-	if lang == "" || !isValidLanguage(lang) {
-		lang = "en"
+// resolveLanguage picks the response language following the same order as
+// the client-side detectLanguage() in web/static/utils.js: explicit ?lang=
+// param first (region subtags normalized away, e.g. fr-CA -> fr), then
+// Accept-Language (q-value weighted), then English. An unsupported ?lang
+// value falls through to the header instead of shadowing it.
+func resolveLanguage(langParam, acceptLanguage string) string {
+	if lang := primaryLanguageTag(langParam); isValidLanguage(lang) {
+		return lang
 	}
+	if lang := parseAcceptLanguage(acceptLanguage); lang != "" {
+		return lang
+	}
+	return "en"
+}
+
+// htmlHandler serves HTML files with language preference handling.
+func htmlHandler(ctx echo.Context, path string) error {
+	lang := resolveLanguage(ctx.QueryParam("lang"), ctx.Request().Header.Get("Accept-Language"))
 
 	// Pass language to template context
 	h := ctx.Response().Header()
