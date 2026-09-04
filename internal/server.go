@@ -322,11 +322,13 @@ func setupRoutes(e *echo.Echo, handlers *SecretHandlers) {
 
 	// Static assets with tiered caching. Locales share the short tier so a
 	// deploy's new HTML and translations expire together — a longer locale
-	// TTL would leave browsers pairing fresh HTML with stale JSON.
+	// TTL would leave browsers pairing fresh HTML with stale JSON. Font
+	// filenames are not content-hashed, so no "immutable": 7 days bounds
+	// the staleness window while keeping revalidation cheap.
 	static := e.Group("/static")
 	staticMethods := []string{"GET", "HEAD"}
-	static.Match(staticMethods, "/fonts/*", fontCacheHandler)
-	static.Match(staticMethods, "/icons/*", longCacheHandler)
-	static.Match(staticMethods, "/locales/*", shortCacheHandler)
-	static.Match(staticMethods, "/*", shortCacheHandler)
+	static.Match(staticMethods, "/fonts/*", cacheHandler(fontsCacheControl))
+	static.Match(staticMethods, "/icons/*", cacheHandler(iconsCacheControl))
+	static.Match(staticMethods, "/locales/*", cacheHandler(shortCacheControl))
+	static.Match(staticMethods, "/*", cacheHandler(shortCacheControl))
 }

@@ -132,6 +132,26 @@ func TestResolveLanguage(t *testing.T) {
 	}
 }
 
+func TestHTMLCachePolicies(t *testing.T) {
+	t.Run("publicHTMLCache uses the shared short tier", func(t *testing.T) {
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodGet, "/msg", nil)
+		assert.Equal(t, shortCacheControl, publicHTMLCache(e.NewContext(req, nil)))
+	})
+
+	t.Run("getmsgHTMLCache disables storage for token-bearing URLs", func(t *testing.T) {
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodGet, "/getmsg?token=hvs.CABAAAAAAQAAAAAAAAAABBBB", nil)
+		assert.Equal(t, "no-store, private", getmsgHTMLCache(e.NewContext(req, nil)))
+	})
+
+	t.Run("getmsgHTMLCache uses the shared short tier without token", func(t *testing.T) {
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodGet, "/getmsg", nil)
+		assert.Equal(t, shortCacheControl, getmsgHTMLCache(e.NewContext(req, nil)))
+	})
+}
+
 func TestGetMsgHandler(t *testing.T) {
 	tests := []struct {
 		name           string
