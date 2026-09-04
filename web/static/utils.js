@@ -118,6 +118,12 @@ export function applyTranslations() {
       return;
     }
 
+    // Skip elements currently showing dynamic content (e.g. a chosen file
+    // name) so a language switch does not clobber it with a static label.
+    if (element.classList.contains('has-file')) {
+      return;
+    }
+
     if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
       element.placeholder = translation;
     } else if (element.tagName === 'META') {
