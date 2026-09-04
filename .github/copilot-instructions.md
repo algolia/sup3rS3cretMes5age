@@ -95,7 +95,11 @@ docker compose -f deploy/docker-compose.yml up --build -d
   - `web/static/utils.js`
   - `web/static/index.js`
   - `web/static/getmsg.js`
-- Supported languages: `en`, `fr`, `es`, `de`, `it`.
+- Supported languages are derived from `web/static/locales/*.json` (the single
+  source of truth). Adding a language: drop `<code>.json` in that directory and
+  regenerate `web/static/locales-manifest.json` — server, client validation and
+  the language selector all follow automatically (a Go test enforces manifest/
+  directory consistency).
 - Translation files are in `web/static/locales/*.json` and loaded dynamically.
 - Language selection sources:
   1. URL parameter `?lang=xx`
