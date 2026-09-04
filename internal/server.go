@@ -339,8 +339,16 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 		MaxAge:       86400,
 	}))
 
-	// Enable Gzip compression for all responses
-	e.Use(middleware.Gzip())
+	// Enable Gzip compression for all responses except Range requests:
+	// compressing a 206 Partial Content response would replace the body with
+	// gzip data while Content-Range/Content-Length still describe the
+	// identity representation (RFC 9110 range semantics), corrupting any
+	// range-capable client's download.
+	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+		Skipper: func(c echo.Context) bool {
+			return c.Request().Header.Get("Range") != ""
+		},
+	}))
 
 	// Limit to rateLimitRate RPS (rateLimitBurst burst) per client IP, per
 	// the repository's security contract: the security checklist pins the
