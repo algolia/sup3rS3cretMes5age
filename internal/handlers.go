@@ -198,7 +198,6 @@ func (s SecretHandlers) GetMsgHandler(ctx echo.Context) error {
 	}
 
 	h := ctx.Response().Header()
-	addToVaryHeader(h, "Accept-Encoding")
 	h.Set("Cache-Control", "no-store")
 	return ctx.JSON(http.StatusOK, r)
 }
@@ -206,7 +205,6 @@ func (s SecretHandlers) GetMsgHandler(ctx echo.Context) error {
 // healthHandler provides a simple health check endpoint.
 // Returns HTTP 200 OK when the application is running.
 func healthHandler(ctx echo.Context) error {
-	addToVaryHeader(ctx.Response().Header(), "Accept-Encoding")
 	return ctx.String(http.StatusOK, http.StatusText(http.StatusOK))
 }
 
@@ -353,7 +351,8 @@ func htmlHandler(ctx echo.Context, path string, cacheControl func(echo.Context) 
 	h.Set("Content-Language", lang)
 	h.Set("Cache-Control", cacheControl(ctx))
 
-	addToVaryHeader(h, "Accept-Encoding")
+	// Content-Language is derived from Accept-Language, so caches must vary
+	// on it. Vary: Accept-Encoding is handled by the gzip middleware.
 	addToVaryHeader(h, "Accept-Language")
 
 	return ctx.File(path)
@@ -425,7 +424,6 @@ func cacheHandler(cacheControl string) echo.HandlerFunc {
 		}
 
 		h.Set("Cache-Control", cacheControl)
-		addToVaryHeader(h, "Accept-Encoding")
 		return ctx.File(path)
 	}
 }
