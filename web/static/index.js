@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fileNameSpan.classList.remove('has-file');
         // Prefer the active translation; fall back to the original HTML
         // label rather than a hardcoded string or the raw i18n key.
-        fileNameSpan.textContent = window.translations?.no_file_chosen || noFileLabel;
+        fileNameSpan.textContent = translate('no_file_chosen', noFileLabel);
       }
     });
   }
