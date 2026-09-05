@@ -18,8 +18,9 @@ document.addEventListener('DOMContentLoaded', function() {
   // Initialize clipboard functionality
   new ClipboardJS('.btn');
 
-  // Initialize language manager
-  setupLanguage();
+  // Initialize language manager; keep the promise so dynamic strings can
+  // wait for the active locale to be applied before rendering
+  const languageReady = setupLanguage();
 
   // Custom file input handler
   const fileInput = document.getElementById('file-input');
@@ -102,7 +103,11 @@ document.addEventListener('DOMContentLoaded', function() {
     })
     .catch(error => {
       console.error(`An error occurred: ${error}`);
-      window.alert(translate('error_creating', 'An error occurred while creating the secret message.'));
+      // A fast failure can land before the locale load resolves; wait for it
+      // so the alert is rendered in the active language when one exists.
+      languageReady.then(() =>
+        window.alert(translate('error_creating', 'An error occurred while creating the secret message.'))
+      );
     });
   });
 });
