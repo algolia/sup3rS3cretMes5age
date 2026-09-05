@@ -240,10 +240,6 @@ export async function switchLanguage(newLanguage) {
   if (languageSelect && languageSelect.value !== appliedLanguage) {
     languageSelect.value = appliedLanguage;
   }
-
-  if (window.langManager) {
-    window.langManager.currentLanguage = appliedLanguage;
-  }
 }
 
 // Setup language on initial load
@@ -266,15 +262,6 @@ export async function setupLanguage() {
   // Set HTML lang attribute and selector value from the language actually
   // rendered (may be the English fallback if the requested one failed)
   document.documentElement.setAttribute('lang', appliedLanguage);
-
-  // Set up global language manager
-  window.langManager = {
-    currentLanguage: appliedLanguage,
-    switchLanguage: switchLanguage,
-    translate: function(key) {
-      return window.translations?.[key] || key;
-    }
-  };
 
   const languageSelect = document.getElementById('language-select');
 

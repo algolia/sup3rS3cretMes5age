@@ -6,7 +6,7 @@
  * All event handlers are CSP-compliant.
  */
 
-import { $, setupLanguage, translate } from './utils.js';
+import { $, $$, setupLanguage, translate } from './utils.js';
 
 // CSS manipulation helper
 function setStyles(element, styles) {
@@ -85,6 +85,18 @@ document.addEventListener('DOMContentLoaded', function() {
         visibility: 'hidden',
         pointerEvents: 'none'
       });
+
+      // Hide the form heading: the success overlay carries its own title
+      // and is absolutely positioned at the top of the container, where it
+      // would otherwise render on top of the form's heading. Direct-children
+      // selectors keep the success section's own elements visible.
+      $$('.container > h1, .container > p.subtitle').forEach(element =>
+        setStyles(element, {
+          opacity: '0',
+          pointerEvents: 'none',
+          visibility: 'hidden'
+        })
+      );
 
       showURL(data.token, data.filetoken, data.filename);
     })
