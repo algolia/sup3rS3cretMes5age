@@ -26,14 +26,14 @@ document.getElementById("myRange").addEventListener('input', function() {
 
 // New message button handler
 $('.encrypt[name="newMsg"]').addEventListener('click', function() {
-    // Navigate straight to /msg: the root handler redirects there without
-    // forwarding the query string, which would drop the language. Keep the
-    // active language so the creation page renders in the same language;
-    // the token parameters are intentionally dropped — they are one-time
-    // secrets already consumed by the retrieval. Only known language codes
-    // are propagated (normalized via primaryLanguageTag), and assign() is
-    // used instead of a location.href assignment (a pattern flagged as
-    // XSS-prone).
+    // Navigate straight to /msg rather than through the root redirect
+    // (which now forwards the query string): the current URL carries the
+    // consumed one-time token/filetoken/filename parameters, and they must
+    // not leak into the creation page's navigation history. Keep the active
+    // language so the creation page renders in the same language. Only
+    // known language codes are propagated (normalized via
+    // primaryLanguageTag), and assign() is used instead of a location.href
+    // assignment (a pattern flagged as XSS-prone).
     const url = new URL('/msg', window.location.origin);
     const normalizedLang = primaryLanguageTag(new URL(window.location).searchParams.get('lang'));
     if (isValidLanguage(normalizedLang)) {
