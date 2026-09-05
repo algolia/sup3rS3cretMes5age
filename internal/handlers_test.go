@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -100,6 +101,9 @@ func TestParseAcceptLanguage(t *testing.T) {
 		{"unsupported only yields empty", "pt-BR,ja", ""},
 		{"empty header yields empty", "", ""},
 		{"malformed q ignored, default 1.0 used", "de;q=abc,fr;q=0.2", "de"},
+		{"uppercase Q parsed (param names case-insensitive)", "en;Q=0,fr;q=0.5", "fr"},
+		{"out-of-range q ignored, default 1.0 used", "de;q=5,fr;q=0.5", "de"},
+		{"negative q ignored, default 1.0 used", "de;q=-1,fr;q=0.5", "de"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -130,6 +134,22 @@ func TestResolveLanguage(t *testing.T) {
 			assert.Equal(t, tt.expected, resolveLanguage(tt.langParam, tt.header))
 		})
 	}
+}
+
+func TestInitSupportedLanguagesRequiresEnglishFallback(t *testing.T) {
+	tmp := t.TempDir()
+	// Non-English locales alone are not enough: 'en' is the hardcoded
+	// fallback in resolveLanguage and the client, so startup must refuse.
+	if err := os.WriteFile(filepath.Join(tmp, "fr.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := InitSupportedLanguages(tmp)
+	assert.ErrorContains(t, err, "en.json")
+
+	if err := os.WriteFile(filepath.Join(tmp, "en.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	assert.NoError(t, InitSupportedLanguages(tmp))
 }
 
 func TestHTMLCachePolicies(t *testing.T) {

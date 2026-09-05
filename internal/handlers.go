@@ -246,6 +246,12 @@ func loadSupportedLanguages(dir string) ([]string, error) {
 	if len(langs) == 0 {
 		return nil, fmt.Errorf("no locale files found in %s", dir)
 	}
+	// The English fallback is hardcoded in resolveLanguage and the client:
+	// refuse to start without it, otherwise the server would advertise and
+	// request a locale that does not exist.
+	if !slices.Contains(langs, "en") {
+		return nil, fmt.Errorf("required default locale en.json not found in %s", dir)
+	}
 	sort.Strings(langs)
 	return langs, nil
 }
@@ -302,8 +308,11 @@ func parseAcceptLanguage(header string) string {
 		q := 1.0
 		for _, param := range parts[1:] {
 			param = strings.TrimSpace(param)
-			if strings.HasPrefix(param, "q=") {
-				if parsed, err := strconv.ParseFloat(param[2:], 64); err == nil {
+			// Parameter names are case-insensitive (RFC 9110) and quality
+			// values must be within 0-1; anything malformed or out of range
+			// is ignored, leaving the default 1.0.
+			if len(param) >= 2 && strings.EqualFold(param[:2], "q=") {
+				if parsed, err := strconv.ParseFloat(param[2:], 64); err == nil && parsed >= 0 && parsed <= 1 {
 					q = parsed
 				}
 			}
