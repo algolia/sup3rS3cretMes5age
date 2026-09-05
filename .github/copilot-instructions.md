@@ -221,7 +221,7 @@ Other agents (Claude Code, or any coding agent with GitHub access) triage Copilo
 │   ├── index.html                     # Main page (message creation)
 │   ├── getmsg.html                    # Message retrieval page
 │   ├── index.js, getmsg.js, utils.js  # Frontend logic (classic scripts; utils.js defines $ helpers)
-│   ├── locales/                        # Localization files (e.g., en.json, fr.json)
+│   ├── locales/                       # Localization files (e.g., en.json, fr.json)
 │   ├── application.css                # Styling (includes .hidden utility for CSP-safe initial state)
 │   ├── clipboard-2.0.11.min.js        # Vendored copy functionality (lint-ignored)
 │   ├── montserrat.css                 # Font definitions

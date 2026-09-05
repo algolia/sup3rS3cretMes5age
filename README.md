@@ -404,11 +404,11 @@ The application supports 5 languages with automatic detection and seamless switc
 
 | Language | Code | Translation Coverage |
 |----------|------|---------------------|
-| 🇬🇧 English | `en` | Complete (24 keys) |
-| 🇫🇷 French | `fr` | Complete (24 keys) |
-| 🇩🇪 German | `de` | Complete (24 keys) |
-| 🇪🇸 Spanish | `es` | Complete (24 keys) |
-| 🇮🇹 Italian | `it` | Complete (24 keys) |
+| 🇬🇧 English | `en` | Complete (25 keys) |
+| 🇫🇷 French | `fr` | Complete (25 keys) |
+| 🇩🇪 German | `de` | Complete (25 keys) |
+| 🇪🇸 Spanish | `es` | Complete (25 keys) |
+| 🇮🇹 Italian | `it` | Complete (25 keys) |
 
 ### Usage
 
@@ -497,34 +497,37 @@ go vet ./...
 ```
 .
 ├── cmd/sup3rS3cretMes5age/    # Application entry point
-│   └── main.go               # (67 lines)
+│   └── main.go               # Application entry point
 ├── internal/                  # Core business logic
-│   ├── config.go             # Configuration handling (83 lines)
-│   ├── handlers.go           # HTTP request handlers (201 lines)
-│   ├── server.go             # Web server setup (370 lines)
-│   └── vault.go              # Vault integration (192 lines)
+│   ├── config.go             # Configuration handling
+│   ├── handlers.go           # HTTP request handlers
+│   ├── server.go             # Web server setup
+│   └── vault.go              # Vault integration
 ├── web/static/               # Frontend assets
 │   ├── index.html           # Message creation page
 │   ├── getmsg.html          # Message retrieval page
 │   ├── index.js             # Main page logic (ES6 modules)
 │   ├── getmsg.js            # Retrieval page logic (ES6 modules)
-│   ├── utils.js             # i18n utilities & helpers (130 lines)
+│   ├── utils.js             # i18n utilities & helpers
 │   ├── application.css      # Styling
+│   ├── montserrat.css       # Font-face declarations
+│   ├── robots.txt           # Crawler directives
+│   ├── locales-manifest.json # Generated language list (see i18n section)
 │   ├── clipboard-2.0.11.min.js
+│   ├── fonts/               # Self-hosted font files
+│   ├── icons/               # Favicon / PWA icons
 │   └── locales/             # Translation files
-│       ├── en.json          # English (24 keys)
-│       ├── fr.json          # French (24 keys)
-│       ├── de.json          # German (24 keys)
-│       ├── es.json          # Spanish (24 keys)
-│       └── it.json          # Italian (24 keys)
+│       ├── en.json          # English (25 keys)
+│       ├── fr.json          # French (25 keys)
+│       ├── de.json          # German (25 keys)
+│       ├── es.json          # Spanish (25 keys)
+│       └── it.json          # Italian (25 keys)
 ├── deploy/                   # Deployment configs
 │   ├── Dockerfile           # Multi-stage build with security hardening
 │   ├── docker-compose.yml   # Local dev stack with resource limits
 │   └── charts/              # Helm chart for Kubernetes
 └── Makefile                 # Build automation & minification
 ```
-
-**Total Code**: 1,043 lines of Go across 4 core files (excluding tests)
 
 ## Contributing
 
