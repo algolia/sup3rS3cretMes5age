@@ -30,9 +30,9 @@ Always reference these instructions first and fall back to search or bash comman
   curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
     sh -s -- -b "$(go env GOPATH)/bin" v2.7.2
   ```
-- Install JavaScript linter (repo uses flat ESLint config):
+- Install JavaScript linter (repo uses flat ESLint config; pinned to match CI):
   ```bash
-  npm install eslint
+  npm install --no-save eslint@9.39.2
   ```
 
 ### Testing and Validation
@@ -85,7 +85,9 @@ make logs
 make stop
 make clean
 ```
-Equivalent direct command:
+Equivalent direct command (note: prefer `make build` for builds — it passes
+VERSION/BUILD_DATE/VCS_REF, which a bare compose build leaves empty in the
+image's OCI labels):
 ```bash
 docker compose -f deploy/docker-compose.yml up --build -d
 ```
@@ -118,7 +120,8 @@ docker compose -f deploy/docker-compose.yml up --build -d
   - other `/static/*`: short cache
 - HTML pages set `Content-Language` and `Vary: Accept-Language`.
 - `getmsg` with token uses `Cache-Control: no-store, private`.
-- API/health responses include `Vary: Accept-Encoding`; gzip middleware is enabled globally.
+- The gzip middleware is enabled globally (skipping `Range` requests) and is
+  what adds `Vary: Accept-Encoding`; handlers must not set it manually.
 
 ### Security and API Notes
 - Rate limiting remains enabled via Echo middleware (10 req/s, burst 20).
@@ -127,8 +130,10 @@ docker compose -f deploy/docker-compose.yml up --build -d
 
 ### Docker Build Pipeline
 - `deploy/Dockerfile` is multi-stage:
-  - Go builder stage
-  - Node web-builder stage that minifies JS/HTML/CSS/locale JSON
+  - Go builder stage (module files copied before sources for layer caching)
+  - Node web-builder stage that regenerates `locales-manifest.json` and
+    minifies JS/HTML/CSS/locale JSON (pinned via `NODE_MINIFY_VERSION`,
+    fails the build on minify errors)
   - Final Alpine runtime image with non-root user
 - Image labels include OCI metadata (`version`, `created`, `revision`).
 
@@ -198,6 +203,7 @@ Run all of the following before committing:
 │   │   ├── es.json
 │   │   ├── fr.json
 │   │   └── it.json
+│   ├── locales-manifest.json
 │   ├── clipboard-2.0.11.min.js
 │   ├── fonts/
 │   └── icons/
@@ -213,7 +219,8 @@ Run all of the following before committing:
 
 ## CI Pipeline (CircleCI)
 - `lint` job (Go formatter + golangci-lint, Go image `cimg/go:1.26`)
-- `jslint` job (Node image `cimg/node:25.8`, runs ESLint)
+- `jslint` job (Node image `cimg/node:25.8`, runs ESLint 9.39.2 — pinned,
+  cached)
 - `test` job (`make test`, requires `lint`)
 
 ### Helm Deployment
