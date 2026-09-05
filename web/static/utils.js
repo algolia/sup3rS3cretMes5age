@@ -136,11 +136,19 @@ export async function loadTranslations(language, requestId = null) {
   }
 }
 
+// Own-property-only lookup: enumerates the loaded translations instead of
+// using computed key access, so inherited names ("constructor", "__proto__")
+// can never resolve and no dynamic object-injection sink exists.
+function lookupTranslation(key) {
+  const entry = Object.entries(window.translations ?? {}).find(([name]) => name === key);
+  return entry ? entry[1] : undefined;
+}
+
 // Translate a key using the loaded locale. Falls back to the provided
 // default (typically the English string) when translations are missing or
 // not yet loaded, so dynamic strings degrade to content, never key names.
 export function translate(key, fallback) {
-  return window.translations?.[key] || fallback || key;
+  return lookupTranslation(key) || fallback || key;
 }
 
 // Apply translations to the page elements with data-i18n attributes
@@ -149,7 +157,7 @@ export function applyTranslations() {
   const elements = $$('[data-i18n]');
   elements.forEach(element => {
     const key = element.getAttribute('data-i18n');
-    const translation = window.translations?.[key];
+    const translation = lookupTranslation(key);
 
     // Skip keys with no translation: writing the raw key would replace
     // valid content. A missing key degrades gracefully to the original
@@ -179,8 +187,8 @@ export function applyTranslations() {
 
 // Update meta title and description based on translations
 export function updateMetaTags() {
-  const title = window.translations?.['meta_title'] || 'sup3rS3cretMes5age';
-  const description = window.translations?.['meta_description'] || 'Send self-destructing one-time secret messages securely.';
+  const title = lookupTranslation('meta_title') || 'sup3rS3cretMes5age';
+  const description = lookupTranslation('meta_description') || 'Send self-destructing one-time secret messages securely.';
 
   // Update standard meta tags
   const descMeta = $('meta[name="description"]');
