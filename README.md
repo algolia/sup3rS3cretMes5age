@@ -102,10 +102,13 @@ docker run -d --name vault-dev -p 8200:8200 \
 
 # Build and run the application
 go build -o sup3rs3cret cmd/sup3rS3cretMes5age/main.go
+
+# Run from web/ so the static/ directory (pages, locales, assets) resolves
+cd web
 VAULT_ADDR=http://localhost:8200 \
 VAULT_TOKEN=supersecret \
 SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS=":8080" \
-./sup3rs3cret
+../sup3rs3cret
 ```
 
 ## Deployment
@@ -401,11 +404,11 @@ The application supports 5 languages with automatic detection and seamless switc
 
 | Language | Code | Translation Coverage |
 |----------|------|---------------------|
-| 🇬🇧 English | `en` | Complete (23 keys) |
-| 🇫🇷 French | `fr` | Complete (23 keys) |
-| 🇩🇪 German | `de` | Complete (23 keys) |
-| 🇪🇸 Spanish | `es` | Complete (23 keys) |
-| 🇮🇹 Italian | `it` | Complete (23 keys) |
+| 🇬🇧 English | `en` | Complete (24 keys) |
+| 🇫🇷 French | `fr` | Complete (24 keys) |
+| 🇩🇪 German | `de` | Complete (24 keys) |
+| 🇪🇸 Spanish | `es` | Complete (24 keys) |
+| 🇮🇹 Italian | `it` | Complete (24 keys) |
 
 ### Usage
 
@@ -509,11 +512,11 @@ go vet ./...
 │   ├── application.css      # Styling
 │   ├── clipboard-2.0.11.min.js
 │   └── locales/             # Translation files
-│       ├── en.json          # English (23 keys)
-│       ├── fr.json          # French (23 keys)
-│       ├── de.json          # German (23 keys)
-│       ├── es.json          # Spanish (23 keys)
-│       └── it.json          # Italian (23 keys)
+│       ├── en.json          # English (24 keys)
+│       ├── fr.json          # French (24 keys)
+│       ├── de.json          # German (24 keys)
+│       ├── es.json          # Spanish (24 keys)
+│       └── it.json          # Italian (24 keys)
 ├── deploy/                   # Deployment configs
 │   ├── Dockerfile           # Multi-stage build with security hardening
 │   ├── docker-compose.yml   # Local dev stack with resource limits
