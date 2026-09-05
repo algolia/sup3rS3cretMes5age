@@ -297,10 +297,12 @@ func TestServerGzipCompression(t *testing.T) {
 			}
 
 			if tt.checkVary {
-				varyHeader := rec.Header().Get("Vary")
-				assert.NotEmpty(t, varyHeader, "Should have Vary header")
-				// Vary header may contain "Origin" from CORS middleware, just verify it exists
-				assert.Contains(t, varyHeader, "Accept-Encoding", "Vary header should be set by middleware")
+				// The gzip middleware Add()s a separate Vary value (CORS
+				// adds "Origin"), so inspect all values, not Get() which
+				// returns only the first.
+				varyValues := rec.Header().Values("Vary")
+				assert.NotEmpty(t, varyValues, "Should have Vary header")
+				assert.Contains(t, varyValues, "Accept-Encoding", "Vary header should be set by the gzip middleware")
 			}
 		})
 	}
