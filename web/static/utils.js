@@ -232,9 +232,12 @@ export async function switchLanguage(newLanguage) {
 
   // Update URL with language parameter: this records the user's intent, so
   // a reload retries the requested language even if this attempt falls back.
+  // replaceState (not pushState): the language is a page preference, not a
+  // navigation — a history entry per switch would make the Back button
+  // change only the URL with no popstate handler to re-render.
   const url = new URL(window.location);
   url.searchParams.set('lang', newLanguage);
-  window.history.pushState({}, '', url);
+  window.history.replaceState({}, '', url);
 
   // Load translations with request ID to guard against race conditions
   const appliedLanguage = await loadTranslations(newLanguage, currentRequestId);
