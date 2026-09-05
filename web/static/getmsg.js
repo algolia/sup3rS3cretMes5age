@@ -26,8 +26,15 @@ document.getElementById("myRange").addEventListener('input', function() {
 
 // New message button handler
 $('.encrypt[name="newMsg"]').addEventListener('click', function() {
-    // Use relative path to avoid open redirect warnings
-    window.location.href = '/';
+    // Use relative path to avoid open redirect warnings. Keep the active
+    // language so the creation page renders in the same language; the token
+    // parameters are intentionally dropped.
+    const url = new URL('/', window.location.origin);
+    const lang = new URL(window.location).searchParams.get('lang');
+    if (lang) {
+        url.searchParams.set('lang', lang);
+    }
+    window.location.href = url.toString();
 });
 
 // Validate and construct secret URL from token
