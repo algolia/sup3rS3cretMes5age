@@ -60,13 +60,23 @@ jobs:
     executor: node
     steps:
       - checkout
+      - restore_cache:
+          keys:
+            # Bump the ESLint pin below together with this key
+            - eslint-9.39.2
       - run:
           name: Install ESLint
-          command: npm install eslint
+          # Pinned version: an unpinned install lints with whatever release
+          # npm resolves that day, so CI results are not reproducible
+          command: npm install --no-save eslint@9.39.2
       - run:
           name: Lint JavaScript
           command: |
-            npx eslint --config eslint.config.js
+            npx eslint --config eslint.config.mjs
+      - save_cache:
+          key: eslint-9.39.2
+          paths:
+            - /home/circleci/.npm
 
 workflows:
   lint_test:

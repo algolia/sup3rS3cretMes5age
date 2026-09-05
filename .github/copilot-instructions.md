@@ -45,7 +45,7 @@ Always reference these instructions first and fall back to search or bash comman
   Takes 30-45 seconds. NEVER CANCEL. Set timeout to 600+ seconds.
 - Run JavaScript linting:
   ```bash
-  npx eslint --config eslint.config.js
+  npx eslint --config eslint.config.mjs
   ```
 - Check formatting: `gofmt -s -l .` (must return no output).
 - Run static analysis: `go vet ./...`.
@@ -159,7 +159,7 @@ Run all of the following before committing:
 - `gofmt -s -l .`
 - `go vet ./...`
 - `export PATH="$PATH:$(go env GOPATH)/bin" && golangci-lint run --timeout 300s`
-- `npx eslint --config eslint.config.js`
+- `npx eslint --config eslint.config.mjs`
 - `make test`
 
 ## Configuration Environment Variables
@@ -203,7 +203,7 @@ Run all of the following before committing:
 │   ├── Dockerfile
 │   ├── docker-compose.yml
 │   └── charts/supersecretmessage/
-├── eslint.config.js
+├── eslint.config.mjs
 ├── Makefile
 ├── README.md
 └── go.mod
