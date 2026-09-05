@@ -63,13 +63,15 @@ Always reference these instructions first and fall back to search or bash comman
    ```bash
    curl -s http://localhost:8200/v1/sys/health
    ```
-3. Build and run app:
+3. Build and run app (from `web/` so the static/ directory — pages,
+   locales, assets — resolves; the server fails to start otherwise):
    ```bash
    go build -o sup3rs3cret cmd/sup3rS3cretMes5age/main.go
+   cd web
    VAULT_ADDR=http://localhost:8200 \
    VAULT_TOKEN=supersecret \
    SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS=":8080" \
-   ./sup3rs3cret
+   ../sup3rs3cret
    ```
 4. Cleanup:
    ```bash
