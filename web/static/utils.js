@@ -90,8 +90,9 @@ function nativeLanguageName(code) {
 
 // Normalize a language tag to its primary subtag, mirroring the server-side
 // primaryLanguageTag(): "fr-CA" -> "fr", "FR" -> "fr". Keeps client-side
-// detection consistent with the server's Content-Language decision.
-function primaryLanguageTag(tag) {
+// language handling (detection, cross-page navigation) consistent with the
+// server's Content-Language decision.
+export function primaryLanguageTag(tag) {
   return String(tag ?? '').trim().toLowerCase().split(/[-_]/)[0];
 }
 

@@ -231,16 +231,29 @@ func TestHealthHandler(t *testing.T) {
 }
 
 func TestRedirectHandler(t *testing.T) {
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	tests := []struct {
+		name             string
+		url              string
+		expectedLocation string
+	}{
+		{"root without query", "/", "/msg"},
+		{"query string preserved", "/?lang=fr", "/msg?lang=fr"},
+		{"multiple params preserved", "/?lang=fr&x=1", "/msg?lang=fr&x=1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodGet, tt.url, nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
 
-	err := redirectHandler(c)
-	assert.NoError(t, err)
+			err := redirectHandler(c)
+			assert.NoError(t, err)
 
-	assert.Equal(t, http.StatusPermanentRedirect, rec.Code)
-	assert.Equal(t, "/msg", rec.Result().Header.Get("Location"))
+			assert.Equal(t, http.StatusPermanentRedirect, rec.Code)
+			assert.Equal(t, tt.expectedLocation, rec.Result().Header.Get("Location"))
+		})
+	}
 }
 
 func TestIsValidTTL(t *testing.T) {

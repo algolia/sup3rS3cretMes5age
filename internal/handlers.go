@@ -202,9 +202,14 @@ func healthHandler(ctx echo.Context) error {
 	return ctx.String(http.StatusOK, http.StatusText(http.StatusOK))
 }
 
-// redirectHandler redirects the root path to the message creation page.
+// redirectHandler redirects the root path to the message creation page,
+// preserving the query string so links like /?lang=fr survive the hop.
 func redirectHandler(ctx echo.Context) error {
-	return ctx.Redirect(http.StatusPermanentRedirect, "/msg")
+	target := "/msg"
+	if qs := ctx.Request().URL.RawQuery; qs != "" {
+		target += "?" + qs
+	}
+	return ctx.Redirect(http.StatusPermanentRedirect, target)
 }
 
 // supportedLanguages holds the UI language codes. It is initialized at
