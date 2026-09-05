@@ -31,6 +31,11 @@ export function $$(selector) {
 // Request ID counter to prevent race conditions in language switching
 let translationRequestId = 0;
 
+// Language whose translations are currently applied to the DOM; null until
+// the first locale loads successfully. Used to report what is actually
+// rendered when a new locale and its English fallback both fail to load.
+let renderedLanguage = null;
+
 export function detectLanguage() {
   // Check URL parameter first (region subtags and case normalized away)
   const urlParams = new URLSearchParams(window.location.search);
@@ -121,14 +126,15 @@ export async function loadTranslations(language, requestId = null) {
 
     // Apply translations to current page
     applyTranslations();
+    renderedLanguage = language;
 
     return language;
   } catch (error) {
     console.error(`Failed to load translations for ${language}:`, error);
     // If English (fallback) also fails, avoid infinite recursion.
     // Keep whatever translations are already loaded: applyTranslations()
-    // skips keys without a translation, so the original HTML text stays
-    // visible instead of being replaced by raw i18n keys.
+    // skips keys without a translation, so the existing text stays visible
+    // instead of being replaced by raw i18n keys.
     if (language === 'en') {
       if (!window.translations) {
         window.translations = {};
@@ -136,7 +142,9 @@ export async function loadTranslations(language, requestId = null) {
       if (requestId !== null && requestId !== translationRequestId) {
         return null;
       }
-      return 'en';
+      // Report the language actually displayed: with a previously rendered
+      // locale still in the DOM, 'en' would mislabel the UI state.
+      return renderedLanguage ?? 'en';
     }
     // Fall back to English
     return loadTranslations('en', requestId);
