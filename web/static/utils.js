@@ -8,10 +8,9 @@
  * 
  * Internationalization (i18n):
  * - detectLanguage(): Auto-detects user language from URL, browser, or defaults to English
- * - isValidLanguage(): Validates if a language code is supported (en, fr, de, es, it)
  * - loadTranslations(): Fetches and applies translation JSON files dynamically
  * - applyTranslations(): Updates DOM elements with data-i18n attributes
- * - updateMetaTags(): Updates document title and meta descriptions for SEO
+ * - translate(): Translates a single key with a fallback
  * - switchLanguage(): Changes active language with URL persistence
  * 
  * All functions are exported as ES6 modules and are CSP-compliant.
@@ -166,66 +165,53 @@ export function translate(key, fallback) {
   return lookupTranslation(key) || fallback || key;
 }
 
+// Original DOM content per element, captured before the first translation
+// pass, so a missing key restores the shipped HTML text instead of leaving
+// another locale's translation behind. WeakMap: no DOM pollution, entries
+// are collected with their elements.
+const originalContent = new WeakMap();
+
+function elementContent(element) {
+  if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+    return element.placeholder;
+  }
+  if (element.tagName === 'META') {
+    return element.getAttribute('content');
+  }
+  return element.textContent;
+}
+
+function setElementContent(element, value) {
+  if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+    element.placeholder = value;
+  } else if (element.tagName === 'META') {
+    element.setAttribute('content', value);
+  } else {
+    element.textContent = value;
+  }
+}
+
 // Apply translations to the page elements with data-i18n attributes
 export function applyTranslations() {
   // Translate elements with data-i18n attribute
   const elements = $$('[data-i18n]');
   elements.forEach(element => {
-    const key = element.getAttribute('data-i18n');
-    const translation = lookupTranslation(key);
-
-    // Skip keys with no translation: writing the raw key would replace
-    // valid content. A missing key degrades gracefully to the original
-    // HTML text (or the previously applied language), never to key names.
-    if (!translation) {
-      return;
-    }
-
     // Skip elements currently showing dynamic content (e.g. a chosen file
     // name) so a language switch does not clobber it with a static label.
     if (element.classList.contains('has-file')) {
       return;
     }
 
-    if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
-      element.placeholder = translation;
-    } else if (element.tagName === 'META') {
-      element.setAttribute('content', translation);
-    } else {
-      element.textContent = translation;
+    const key = element.getAttribute('data-i18n');
+    if (!originalContent.has(element)) {
+      originalContent.set(element, elementContent(element));
     }
+
+    // A missing key restores the original HTML text: the shipped content is
+    // the deterministic floor, so a partially translated locale degrades to
+    // English defaults instead of a mix of languages or raw key names.
+    setElementContent(element, lookupTranslation(key) ?? originalContent.get(element));
   });
-
-  // Update meta tags
-  updateMetaTags();
-}
-
-// Update meta title and description based on translations
-export function updateMetaTags() {
-  const title = lookupTranslation('meta_title') || 'sup3rS3cretMes5age';
-  const description = lookupTranslation('meta_description') || 'Send self-destructing one-time secret messages securely.';
-
-  // Update standard meta tags
-  const descMeta = $('meta[name="description"]');
-  if (descMeta) {
-    descMeta.setAttribute('content', description);
-  }
-
-  const titleElement = $('title');
-  if (titleElement) {
-    titleElement.textContent = title;
-  }
-
-  // Update Open Graph meta tags
-  const ogTitle = $('meta[property="og:title"]');
-  if (ogTitle) {
-    ogTitle.setAttribute('content', title);
-  }
-
-  const ogDescription = $('meta[property="og:description"]');
-  if (ogDescription) {
-    ogDescription.setAttribute('content', description);
-  }
 }
 
 // Switch language and reload translations
