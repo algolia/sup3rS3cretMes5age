@@ -4,10 +4,15 @@ WORKDIR /go/src/github.com/algolia/sup3rS3cretMes5age
 
 ARG VERSION
 
-COPY . .
+# Copy the module files first so the download layer survives any source
+# edit, then only the Go packages so web-asset changes (handled by the
+# web-builder stage) don't invalidate the compile layer.
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd/ cmd/
+COPY internal/ internal/
 
 # build process
-RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -trimpath \
     -a \
