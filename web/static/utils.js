@@ -32,16 +32,16 @@ export function $$(selector) {
 let translationRequestId = 0;
 
 export function detectLanguage() {
-  // Check URL parameter first
+  // Check URL parameter first (region subtags and case normalized away)
   const urlParams = new URLSearchParams(window.location.search);
-  const langParam = urlParams.get('lang');
-  if (langParam && isValidLanguage(langParam)) {
+  const langParam = primaryLanguageTag(urlParams.get('lang'));
+  if (isValidLanguage(langParam)) {
     return langParam;
   }
 
   // Check browser language preference
   const browserLang = navigator.language || navigator.userLanguage;
-  const langCode = browserLang.split('-')[0];
+  const langCode = primaryLanguageTag(browserLang);
   if (isValidLanguage(langCode)) {
     return langCode;
   }
@@ -82,6 +82,13 @@ function nativeLanguageName(code) {
   } catch {
     return code.toUpperCase();
   }
+}
+
+// Normalize a language tag to its primary subtag, mirroring the server-side
+// primaryLanguageTag(): "fr-CA" -> "fr", "FR" -> "fr". Keeps client-side
+// detection consistent with the server's Content-Language decision.
+function primaryLanguageTag(tag) {
+  return String(tag ?? '').trim().toLowerCase().split(/[-_]/)[0];
 }
 
 // Validate if the language is supported
