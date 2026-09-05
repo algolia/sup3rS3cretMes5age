@@ -205,6 +205,8 @@ Run all of the following before committing:
 │   │   └── it.json
 │   ├── locales-manifest.json
 │   ├── clipboard-2.0.11.min.js
+│   ├── montserrat.css
+│   ├── robots.txt
 │   ├── fonts/
 │   └── icons/
 ├── deploy/
