@@ -282,69 +282,6 @@ o() {
 }
 ```
 
-### Troubleshooting
-
-**"go: ... tls: failed to verify certificate"**
-- This may occur in Docker builds in some CI environments
-- Solution: Use local Go builds instead: `go build -o sup3rs3cret cmd/sup3rS3cretMes5age/main.go`
-
-**"jq: command not found"**
-```bash
-# Ubuntu/Debian
-sudo apt-get install jq
-
-# macOS  
-brew install jq
-```
-
-**"vault connection refused"**
-- Ensure Vault dev server is running: `docker ps | grep vault`
-- Check Vault health: `curl http://localhost:8200/v1/sys/health`
-- Restart if needed: `docker restart vault-dev`
-
-**Test failures with Vault errors**
-- Tests create their own Vault instances
-- Verbose logging is normal (200+ lines per test)
-- NEVER CANCEL tests - they clean up automatically
-
-**Port 8082 already in use**
-```bash
-# Find what's using the port
-sudo lsof -i :8082
-# or
-sudo netstat -tulpn | grep 8082
-
-# Stop docker-compose if running
-make stop
-```
-
-**Build fails with "cannot find package"**
-```bash
-# Clean Go module cache and re-download
-go clean -modcache
-go mod download
-```
-
-### Makefile Targets Reference
-```bash
-make test          # Run all unit tests (takes 2-3 min)
-make image         # Build multi-platform Docker image with attestations
-make build         # Build Docker image via docker-compose
-make run           # Start docker-compose stack (Vault + App on :8082)
-make run-local     # Clean and start docker-compose
-make logs          # Tail docker-compose logs
-make stop          # Stop docker-compose services
-make clean         # Remove docker-compose containers
-```
-
-### CircleCI Pipeline
-The project uses CircleCI with three jobs:
-1. **lint**: Format checking (gofmt), golangci-lint
-2. **jslint**: JavaScript linting via pinned ESLint (see `eslint.config.mjs`)
-3. **test**: Unit tests via `make test`
-
-Pipeline runs on Go 1.26 docker image (`cimg/go:1.26`) for Go jobs and Node 25 (`cimg/node:25.8`) for jslint.
-
 ### Helm Deployment
 - Helm chart path: `deploy/charts/supersecretmessage/`.
 - Includes: Deployment, Service, Ingress, HPA, ServiceAccount
@@ -415,8 +352,11 @@ make stop          # Stop docker-compose services
 make clean         # Remove docker-compose containers
 ```
 
-## CI Pipeline (CircleCI)
-- `lint` job (Go formatter + golangci-lint, Go image `cimg/go:1.26`)
-- `jslint` job (Node image `cimg/node:25.8`, runs ESLint 9.39.2 — pinned, cached)
-- `test` job (`make test`, requires `lint`)
-- `deploy-check` job (helm lint 3.16.4, hadolint 2.12.0, docker compose)
+### CircleCI Pipeline
+The project uses CircleCI with three jobs:
+1. **deploy-check**: Check deployment files (Dockerfile, docker-compose, Helm chart) validity
+2. **lint**: Format checking (gofmt), golangci-lint
+3. **jslint**: JavaScript linting via pinned ESLint (see `eslint.config.mjs`)
+4. **test**: Unit tests via `make test`
+
+Pipeline runs on Go 1.26 docker image (`cimg/go:1.26`) for Go jobs and Node 25 (`cimg/node:25.8`) for jslint, and Base image (`cimg/base:2025.09`).
