@@ -18,6 +18,19 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 # Web assets minification stage
 FROM node:25.8.1-alpine AS web-builder
 WORKDIR /app
+
+# Exact pin: a floating pin re-resolves on every build, so a new minor
+# release can silently change minification output between two builds of the
+# same commit. Installed before COPY so this layer is cached — it invalidates
+# only when the pin changes, not on every web-asset edit.
+ARG NODE_MINIFY_VERSION=10.5.0
+RUN npm install -g \
+    @node-minify/cli@${NODE_MINIFY_VERSION} \
+    @node-minify/terser@${NODE_MINIFY_VERSION} \
+    @node-minify/lightningcss@${NODE_MINIFY_VERSION} \
+    @node-minify/html-minifier@${NODE_MINIFY_VERSION} \
+    @node-minify/jsonminify@${NODE_MINIFY_VERSION}
+
 COPY web/ ./
 
 # Regenerate the language manifest from the locales directory so the shipped
@@ -25,12 +38,10 @@ COPY web/ ./
 # web/static/ is only a fallback for non-Docker (local) runs.
 RUN node -e "const fs=require('fs');const langs=fs.readdirSync('static/locales').filter(f=>f.endsWith('.json')).map(f=>f.slice(0,-5)).sort();fs.writeFileSync('static/locales-manifest.json',JSON.stringify({languages:langs},null,2)+'\n')"
 
-# Minify JS and CSS files
-RUN npm install -g @node-minify/cli@10 \
-    @node-minify/terser@10 \
-    @node-minify/lightningcss@10 \
-    @node-minify/html-minifier@10 \
-    @node-minify/jsonminify@10 && \
+# Minify JS and CSS files. set -eu aborts the build if any node-minify
+# invocation fails — without it only the trailing mv was skipped and the
+# loop continued, silently shipping the unminified file.
+RUN set -eu && \
     cd static && \
     for fi in utils.js index.js getmsg.js; \
     do \
