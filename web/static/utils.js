@@ -253,6 +253,10 @@ export async function switchLanguage(newLanguage) {
   if (languageSelect && languageSelect.value !== appliedLanguage) {
     languageSelect.value = appliedLanguage;
   }
+  // Localized accessible name: aria-label is not covered by data-i18n
+  if (languageSelect) {
+    languageSelect.setAttribute('aria-label', translate('select_language', 'Select language'));
+  }
 }
 
 // Setup language on initial load
@@ -291,6 +295,8 @@ export async function setupLanguage() {
     if (languageSelect.value !== appliedLanguage) {
       languageSelect.value = appliedLanguage;
     }
+    // Localized accessible name: aria-label is not covered by data-i18n
+    languageSelect.setAttribute('aria-label', translate('select_language', 'Select language'));
     // Add event listener for language selector (CSP-compliant)
     languageSelect.addEventListener('change', function() {
       switchLanguage(this.value);

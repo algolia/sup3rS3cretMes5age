@@ -22,5 +22,6 @@
   "invalid_token": "Jeton invalide ou manquant",
   "message_already_deleted": "Le message a déjà été supprimé :(",
   "error_creating": "Une erreur s'est produite lors de la création du message secret.",
-  "message_placeholder": "Le message devrait apparaître ici"
+  "message_placeholder": "Le message devrait apparaître ici",
+  "select_language": "Sélectionner la langue"
 }
