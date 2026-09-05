@@ -201,6 +201,13 @@ div.footer img {
   z-index: -1;
 }
 
+/* Keyboard focus: the native input is visually hidden but still focusable,
+   so mirror :focus-visible onto the visible button inside its label. */
+.hidden-file-input:focus-visible + .file-label .file-button {
+  outline: 2px solid #2dde98;
+  outline-offset: 2px;
+}
+
 .file-label {
   display: flex;
   align-items: center;

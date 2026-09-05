@@ -22,5 +22,6 @@
   "invalid_token": "Token no válido o ausente",
   "message_already_deleted": "El mensaje ya fue eliminado :(",
   "error_creating": "Ocurrió un error al crear el mensaje secreto.",
-  "message_placeholder": "El mensaje debería aparecer aquí"
+  "message_placeholder": "El mensaje debería aparecer aquí",
+  "select_language": "Seleccionar idioma"
 }
