@@ -25,10 +25,19 @@ Always reference these instructions first and fallback to search or bash command
 - Install linter: `curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.7.2` -- takes 30-60 seconds. Current system has v2.7.2.
 
 ### Testing and Validation
-- Run tests: `make test` -- takes 2-3 minutes. NEVER CANCEL. Set timeout to 300+ seconds.
-- Run linting: `export PATH=$PATH:$(go env GOPATH)/bin && golangci-lint run --timeout 300s` -- takes 30-45 seconds. NEVER CANCEL. Set timeout to 600+ seconds.
-- Check formatting: `gofmt -s -l .` -- should return no output if properly formatted
-- Run static analysis: `go vet ./...` -- takes <5 seconds
+- Run unit tests: `make test` (2-3 minutes). NEVER CANCEL. Set timeout to 300+ seconds.
+- Run Go linting:
+  ```bash
+  export PATH="$PATH:$(go env GOPATH)/bin"
+  golangci-lint run --timeout 300s
+  ```
+  Takes ~300 seconds. NEVER CANCEL. Set timeout to 600+ seconds.
+- Run JavaScript linting:
+  ```bash
+  npx eslint --config eslint.config.mjs
+  ```
+- Check formatting: `gofmt -s -l .` (must return no output).
+- Run static analysis: `go vet ./...`.
 
 ### Running the Application
 **ALWAYS run the bootstrapping steps first before starting the application.**
@@ -114,11 +123,13 @@ curl -s http://localhost:8080/health  # Should return "OK"
 ```
 
 ### Pre-commit Validation
-Always run these commands before committing:
-- `gofmt -s -l .` -- Should return no output
-- `go vet ./...` -- Should complete without errors  
-- `export PATH=$PATH:$(go env GOPATH)/bin && golangci-lint run --timeout 300s` -- Should complete without errors. NEVER CANCEL. Set timeout to 600+ seconds.
-- `make test` -- Should pass all tests. NEVER CANCEL. Set timeout to 300+ seconds.
+
+Run all of the following before committing:
+- `gofmt -s -l .`
+- `go vet ./...`
+- `export PATH="$PATH:$(go env GOPATH)/bin" && golangci-lint run --timeout 300s`
+- `npx eslint --config eslint.config.mjs`
+- `make test`
 
 ## Common Tasks
 
@@ -168,44 +179,11 @@ Always run these commands before committing:
 │   ├── Dockerfile                  # Multi-stage container build
 │   ├── docker-compose.yml          # Local development stack (Vault + App)
 │   └── charts/supersecretmessage/  # Helm c(lint + test pipeline)
-.codacy.yml        # Code quality config
-.dockerignore      # Docker ignore patterns
-.git/              # Git repository data
-.github/           # GitHub configuration (copilot-instructions.md)
-.gitignore         # Git ignore patterns
-CLI.md             # Command-line usage guide (313 lines, Bash/Zsh/Fish examples)
-CODEOWNERS         # GitHub code owners
-LICENSE            # MIT license
-Makefile           # Build targets (test, image, build, run, logs, stop, clean)
-Makefile.buildx    # Advanced buildx targets (multi-platform, AWS ECR)
-README.md          # Main documentation (176 lines)
-cmd/               # Application entry points
-deploy/            # Deployment configurations (Docker, Helm)
-go.mod             # Go module file (go 1.25.1)
-go.sum             # Go dependency checksums
-internal/          # Internal packages (609 lines total)
-web/               # Web assets (static HTML, CSS, JS, fonts, icons)
-### Frequently Used Commands Output
-
-#### Repository Root Files
-```bash
-$ ls -la
-.circleci/         # CircleCI configuration  
-.codacy.yml        # Code quality config
-.dockerignore      # Docker ignore patterns
-.git/              # Git repository data
-.gitignore         # Git ignore patterns
-CLI.md             # Command-line usage guide
-CODEOWNERS         # GitHub code owners
-LICENSE            # MIT license
-Makefile           # Build targets
-README.md          # Main documentation
-cmd/               # Application entry points
-deploy/            # Deployment configurations
-go.mod             # Go module file
-go.sum             # Go checksum file
-internal/          # Internal packages
-web/               # Web assets
+├── eslint.config.mjs
+├── Makefile
+├── README.md
+└── go.mod
+└── go.sum
 ```
 
 #### Package.json Equivalent (go.mod)
