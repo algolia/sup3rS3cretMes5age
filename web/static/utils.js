@@ -35,6 +35,18 @@ let translationRequestId = 0;
 // rendered when a new locale and its English fallback both fail to load.
 let renderedLanguage = null;
 
+// Promise for the latest language load (initial setup or in-flight switch).
+// Dynamic user-facing strings must await whenLanguageReady() before
+// rendering: awaiting only the initial setup promise would let an error that
+// overlaps a language switch land in the previous language.
+let languagePromise = Promise.resolve();
+
+// Resolve when the most recent language load (setup or switch) has settled,
+// i.e. when translate() reflects the currently selected language.
+export function whenLanguageReady() {
+  return languagePromise;
+}
+
 export function detectLanguage() {
   // Check URL parameter first (region subtags and case normalized away)
   const urlParams = new URLSearchParams(window.location.search);
@@ -177,6 +189,20 @@ export function translate(key, fallback) {
 // are collected with their elements.
 const originalContent = new WeakMap();
 
+// Record the shipped content of every data-i18n element up front. This must
+// happen before any async work: applyTranslations() skips elements marked
+// has-file, so an element whose state changed before the first translation
+// pass (e.g. a file chosen while the initial locale fetch is pending) would
+// otherwise never get an original recorded, and a later missing-key fallback
+// could keep another locale's text instead of the shipped one.
+function captureOriginalContent() {
+  $$('[data-i18n]').forEach(element => {
+    if (!originalContent.has(element)) {
+      originalContent.set(element, elementContent(element));
+    }
+  });
+}
+
 function elementContent(element) {
   if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
     return element.placeholder;
@@ -239,8 +265,12 @@ export async function switchLanguage(newLanguage) {
   url.searchParams.set('lang', newLanguage);
   window.history.replaceState({}, '', url);
 
-  // Load translations with request ID to guard against race conditions
-  const appliedLanguage = await loadTranslations(newLanguage, currentRequestId);
+  // Load translations with request ID to guard against race conditions, and
+  // track the load so dynamic error paths awaiting whenLanguageReady() render
+  // in the language being switched to, not the previous one
+  const loadPromise = loadTranslations(newLanguage, currentRequestId);
+  languagePromise = loadPromise;
+  const appliedLanguage = await loadPromise;
 
   // Nothing superseded us: reflect the language actually rendered. If the
   // fetch failed and English was used as fallback, the UI state must say
@@ -264,11 +294,17 @@ export async function switchLanguage(newLanguage) {
   }
 }
 
-// Setup language on initial load
-export async function setupLanguage() {
+// Setup language on initial load. Not itself async: the work runs in a
+// promise tracked for whenLanguageReady(), so the initial load is covered
+// exactly like a later switch.
+export function setupLanguage() {
+  const ready = (async () => {
+    // Capture shipped content before any async work (see
+    // captureOriginalContent): the first await below must not run first.
+    captureOriginalContent();
 
-  // Load the language list before detection/translation: it drives both
-  await loadLanguageManifest();
+    // Load the language list before detection/translation: it drives both
+    await loadLanguageManifest();
 
   const currentLanguage = detectLanguage();
 
@@ -307,4 +343,8 @@ export async function setupLanguage() {
       switchLanguage(this.value);
     });
   }
+  })();
+
+  languagePromise = ready;
+  return ready;
 }

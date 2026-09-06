@@ -6,7 +6,7 @@
  * All event handlers are CSP-compliant.
  */
 
-import { $, $$, setupLanguage, translate } from './utils.js';
+import { $, $$, setupLanguage, translate, whenLanguageReady } from './utils.js';
 
 // CSS manipulation helper
 function setStyles(element, styles) {
@@ -18,9 +18,9 @@ document.addEventListener('DOMContentLoaded', function() {
   // Initialize clipboard functionality
   new ClipboardJS('.btn');
 
-  // Initialize language manager; keep the promise so dynamic strings can
-  // wait for the active locale to be applied before rendering
-  const languageReady = setupLanguage();
+  // Initialize language manager; dynamic strings wait on it through
+  // whenLanguageReady(), which also covers in-flight language switches
+  setupLanguage();
 
   // Custom file input handler
   const fileInput = document.getElementById('file-input');
@@ -103,9 +103,11 @@ document.addEventListener('DOMContentLoaded', function() {
     })
     .catch(error => {
       console.error(`An error occurred: ${error}`);
-      // A fast failure can land before the locale load resolves; wait for it
-      // so the alert is rendered in the active language when one exists.
-      languageReady.then(() =>
+      // A fast failure can land before the locale load resolves, and a
+      // switch still in flight would render the previous language; wait for
+      // the latest load so the alert uses the selected language when one
+      // exists.
+      whenLanguageReady().then(() =>
         window.alert(translate('error_creating', 'An error occurred while creating the secret message.'))
       );
     });
