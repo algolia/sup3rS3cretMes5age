@@ -8,13 +8,17 @@
 
 import { $, isValidLanguage, primaryLanguageTag, setupLanguage, translate } from './utils.js';
 
+// Language initialization promise, awaited by dynamic error rendering so
+// user-facing strings land in the active locale
+let languageReady;
+
 // Initialize clipboard and language manager on DOMContentLoaded
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize clipboard functionality
     new ClipboardJS('.btn');
 
     // Initialize language manager
-    setupLanguage();
+    languageReady = setupLanguage();
 });
 
 // Slider input handler
@@ -58,7 +62,13 @@ function validateSecretUrl(token) {
 }
 
 // Fetch and display the secret message
-function showSecret() {
+async function showSecret() {
+    // Dynamic error strings must render in the active language: a fast
+    // failure (invalid/expired token) can otherwise land before the locale
+    // load resolves and write English into the textarea. Awaiting a settled
+    // promise resolves immediately, so this is free in the common case.
+    await languageReady;
+
     const params = (new URL(window.location)).searchParams;
 
     const urlStr = validateSecretUrl(params.get('token'));
