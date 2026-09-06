@@ -7,7 +7,12 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
+	"slices"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -185,6 +190,9 @@ func (s SecretHandlers) GetMsgHandler(ctx echo.Context) error {
 	r := &MsgResponse{
 		Msg: m,
 	}
+
+	h := ctx.Response().Header()
+	h.Set("Cache-Control", "no-store")
 	return ctx.JSON(http.StatusOK, r)
 }
 
@@ -194,7 +202,236 @@ func healthHandler(ctx echo.Context) error {
 	return ctx.String(http.StatusOK, http.StatusText(http.StatusOK))
 }
 
-// redirectHandler redirects the root path to the message creation page.
+// redirectHandler redirects the root path to the message creation page,
+// preserving the query string so links like /?lang=fr survive the hop.
 func redirectHandler(ctx echo.Context) error {
-	return ctx.Redirect(http.StatusPermanentRedirect, "/msg")
+	target := "/msg"
+	if qs := ctx.Request().URL.RawQuery; qs != "" {
+		target += "?" + qs
+	}
+	return ctx.Redirect(http.StatusPermanentRedirect, target)
+}
+
+// supportedLanguages holds the UI language codes. It is initialized at
+// startup from the locales directory — the single source of truth — so
+// adding a locale file (plus regenerating locales-manifest.json for the
+// client) is all that is needed to support a new language.
+var supportedLanguages []string
+
+// InitSupportedLanguages derives the supported UI languages from the *.json
+// files in dir. It must be called once at startup, before serving requests.
+func InitSupportedLanguages(dir string) error {
+	langs, err := loadSupportedLanguages(dir)
+	if err != nil {
+		return err
+	}
+	supportedLanguages = langs
+	return nil
+}
+
+// loadSupportedLanguages lists the locale JSON files in dir, sorted.
+func loadSupportedLanguages(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("reading locales directory %s: %w", dir, err)
+	}
+	var langs []string
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		langs = append(langs, strings.TrimSuffix(name, ".json"))
+	}
+	if len(langs) == 0 {
+		return nil, fmt.Errorf("no locale files found in %s", dir)
+	}
+	// The English fallback is hardcoded in resolveLanguage and the client:
+	// refuse to start without it, otherwise the server would advertise and
+	// request a locale that does not exist.
+	if !slices.Contains(langs, "en") {
+		return nil, fmt.Errorf("required default locale en.json not found in %s", dir)
+	}
+	sort.Strings(langs)
+	return langs, nil
+}
+
+// isValidLanguage checks if the provided language code is supported.
+func isValidLanguage(lang string) bool {
+	return slices.Contains(supportedLanguages, lang)
+}
+
+func addToVaryHeader(h http.Header, value string) {
+	existing := h.Get("Vary")
+	if existing == "" {
+		h.Set("Vary", value)
+		return
+	}
+
+	for _, v := range strings.Split(existing, ",") {
+		if strings.TrimSpace(v) == value {
+			// Value already present, nothing to do.
+			return
+		}
+	}
+
+	h.Set("Vary", existing+", "+value)
+}
+
+// primaryLanguageTag normalizes a language tag to its lowercase primary
+// subtag (e.g. "fr-CA" -> "fr"). Returns "" for empty, wildcard or otherwise
+// regionless-unusable tags.
+func primaryLanguageTag(tag string) string {
+	tag = strings.ToLower(strings.TrimSpace(tag))
+	if i := strings.IndexAny(tag, "-_"); i != -1 {
+		tag = tag[:i]
+	}
+	if tag == "*" {
+		return ""
+	}
+	return tag
+}
+
+// parseAcceptLanguage extracts the supported language with the highest
+// q-value from an Accept-Language header value (e.g. "fr;q=0.1,en;q=0.9").
+// Tags without an explicit q default to 1.0; "*" entries are ignored.
+// Returns "" when no supported language is listed.
+func parseAcceptLanguage(header string) string {
+	bestLang := ""
+	bestQ := 0.0
+	for _, entry := range strings.Split(header, ",") {
+		parts := strings.Split(entry, ";")
+		lang := primaryLanguageTag(parts[0])
+		if !isValidLanguage(lang) {
+			continue
+		}
+		q := 1.0
+		for _, param := range parts[1:] {
+			param = strings.TrimSpace(param)
+			// Parameter names are case-insensitive (RFC 9110) and quality
+			// values must be within 0-1; anything malformed or out of range
+			// is ignored, leaving the default 1.0.
+			if len(param) >= 2 && strings.EqualFold(param[:2], "q=") {
+				if parsed, err := strconv.ParseFloat(param[2:], 64); err == nil && parsed >= 0 && parsed <= 1 {
+					q = parsed
+				}
+			}
+		}
+		if q > bestQ {
+			bestLang = lang
+			bestQ = q
+		}
+	}
+	return bestLang
+}
+
+// resolveLanguage picks the response language following the same order as
+// the client-side detectLanguage() in web/static/utils.js: explicit ?lang=
+// param first (region subtags normalized away, e.g. fr-CA -> fr), then
+// Accept-Language (q-value weighted), then English. An unsupported ?lang
+// value falls through to the header instead of shadowing it.
+func resolveLanguage(langParam, acceptLanguage string) string {
+	if lang := primaryLanguageTag(langParam); isValidLanguage(lang) {
+		return lang
+	}
+	if lang := parseAcceptLanguage(acceptLanguage); lang != "" {
+		return lang
+	}
+	return "en"
+}
+
+// Cache-Control policies for the static cache tiers. shortCacheControl is
+// also shared by the HTML pages, so a deploy's fresh HTML never pairs with
+// stale assets or translations.
+const (
+	shortCacheControl = "public, max-age=300, must-revalidate"
+	iconsCacheControl = "public, max-age=86400, must-revalidate"
+	fontsCacheControl = "public, max-age=604800, must-revalidate"
+)
+
+// htmlHandler serves an HTML file with language preference handling.
+// cacheControl picks the Cache-Control value for each request, since some
+// pages need per-URL decisions (see getmsgHTMLCache).
+func htmlHandler(ctx echo.Context, path string, cacheControl func(echo.Context) string) error {
+	lang := resolveLanguage(ctx.QueryParam("lang"), ctx.Request().Header.Get("Accept-Language"))
+
+	h := ctx.Response().Header()
+	h.Set("Content-Language", lang)
+	h.Set("Cache-Control", cacheControl(ctx))
+
+	// Content-Language is derived from Accept-Language, so caches must vary
+	// on it. Vary: Accept-Encoding is handled by the gzip middleware.
+	addToVaryHeader(h, "Accept-Language")
+
+	return ctx.File(path)
+}
+
+// publicHTMLCache caches HTML pages publicly for 5 minutes.
+func publicHTMLCache(echo.Context) string {
+	return shortCacheControl
+}
+
+// getmsgHTMLCache disables storage for token-bearing URLs: the query string
+// carries a one-time secret token that must not land in shared caches.
+func getmsgHTMLCache(ctx echo.Context) string {
+	if ctx.QueryParam("token") != "" {
+		return "no-store, private"
+	}
+	return shortCacheControl
+}
+
+// indexHandler serves the main message creation HTML page.
+func indexHandler(ctx echo.Context) error {
+	return htmlHandler(ctx, "static/index.html", publicHTMLCache)
+}
+
+// getmsgHandler serves the message retrieval HTML page.
+func getmsgHandler(ctx echo.Context) error {
+	return htmlHandler(ctx, "static/getmsg.html", getmsgHTMLCache)
+}
+
+// getCleanedPath sanitizes and validates the requested static file path.
+func getCleanedPath(ctx echo.Context) (string, error) {
+	// Get URL path (without query string)
+	urlPath := ctx.Request().URL.Path
+
+	// Remove leading slash and clean
+	path := filepath.Clean(strings.TrimPrefix(urlPath, "/"))
+
+	// Security: ensure path starts with "static/" after cleaning
+	if !strings.HasPrefix(path, "static/") && path != "static" {
+		return "", echo.NewHTTPError(http.StatusForbidden, "access denied")
+	}
+
+	return path, nil
+}
+
+// cacheHandler returns a static-file handler applying the given Cache-Control
+// policy, so each route's cache tier is visible next to its registration in
+// the route table.
+func cacheHandler(cacheControl string) echo.HandlerFunc {
+	return func(ctx echo.Context) error {
+		path, err := getCleanedPath(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Check file existence before setting cache headers to avoid caching error responses
+		if stat, err := os.Stat(path); err != nil || stat.IsDir() {
+			return echo.NewHTTPError(http.StatusNotFound, "file not found")
+		}
+
+		h := ctx.Response().Header()
+
+		if strings.HasSuffix(path, ".js") {
+			h.Set("Content-Type", "application/javascript; charset=utf-8")
+		} else if strings.HasSuffix(path, ".css") {
+			h.Set("Content-Type", "text/css; charset=utf-8")
+		} else if strings.HasSuffix(path, ".json") {
+			h.Set("Content-Type", "application/json")
+		}
+
+		h.Set("Cache-Control", cacheControl)
+		return ctx.File(path)
+	}
 }

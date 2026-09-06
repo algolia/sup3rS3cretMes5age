@@ -30,18 +30,24 @@ image:
 		$(DOCKER_OPS) .
 
 build:
-	@docker compose $(COMPOSE_OPTS) build
+	@docker compose $(COMPOSE_OPTS) build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILD_DATE="$(BUILD_DATE)" \
+		--build-arg VCS_REF=$(VCS_REF)
 
 clean:
 	@docker compose $(COMPOSE_OPTS) rm -fv
 
-run-local: clean
-        @DOMAIN=$(DOMAIN) \
-	docker compose $(COMPOSE_OPTS) up --build -d
+run-local: clean run
 
-run:
+# run always builds first: docker compose up reuses an existing image without
+# checking whether sources changed, so skipping the build step here silently
+# tests stale code. The build target passes VERSION/BUILD_DATE/VCS_REF, which
+# compose's implicit build does not — without them the image ships with empty
+# OCI labels.
+run: build
 	@DOMAIN=$(DOMAIN) \
-        docker compose $(COMPOSE_OPTS) up --build -d
+	docker compose $(COMPOSE_OPTS) up -d
 
 logs:
 	@docker compose $(COMPOSE_OPTS) logs -f
