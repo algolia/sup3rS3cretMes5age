@@ -26,7 +26,10 @@ document.getElementById("myRange").addEventListener('input', function() {
 });
 
 // New message button handler
-$('.encrypt[name="newMsg"]').addEventListener('click', function() {
+$('.encrypt[name="newMsg"]').addEventListener('click', async function() {
+    // Ensure the language manifest has been loaded so isValidLanguage() is accurate.
+    await whenLanguageReady();
+
     // Navigate straight to /msg rather than through the root redirect
     // (which now forwards the query string): the current URL carries the
     // consumed one-time token/filetoken/filename parameters, and they must
