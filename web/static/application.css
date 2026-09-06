@@ -201,6 +201,14 @@ div.footer img {
   z-index: -1;
 }
 
+/* Utility for elements hidden until a secret is retrieved. Lives in the
+   stylesheet (not inline style attributes) so the CSP can forbid inline
+   styles entirely — getmsg.js reveals these by assigning element.style,
+   which inline-style CSP rules never restrict. */
+.hidden {
+  display: none;
+}
+
 /* Keyboard focus: the native input is visually hidden but still focusable,
    so mirror :focus-visible onto the visible button inside its label. */
 .hidden-file-input:focus-visible + .file-label .file-button {
