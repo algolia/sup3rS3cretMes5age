@@ -289,12 +289,17 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 	}))
 
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
-		XSSProtection:         "1; mode=block",
-		ContentTypeNosniff:    "nosniff",
-		XFrameOptions:         "DENY",
-		HSTSMaxAge:            31536000,
-		HSTSPreloadEnabled:    true,
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'",
+		XSSProtection:      "1; mode=block",
+		ContentTypeNosniff: "nosniff",
+		XFrameOptions:      "DENY",
+		HSTSMaxAge:         31536000,
+		HSTSPreloadEnabled: true,
+		// style-src forbids inline styles entirely: the pages carry no
+		// <style> elements or style attributes (initial hidden state lives
+		// in application.css's .hidden utility). getmsg.js/index.js reveal
+		// elements by assigning element.style — a JS property, never
+		// restricted by inline-style CSP rules.
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'",
 	}))
 
 	e.Use(middleware.BodyLimit("50M"))
