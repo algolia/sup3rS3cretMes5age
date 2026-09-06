@@ -7,7 +7,7 @@ require (
 	github.com/hashicorp/vault/api v1.23.0
 	github.com/labstack/echo/v4 v4.15.4
 	github.com/stretchr/testify v1.12.1
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 )
 
 require (
