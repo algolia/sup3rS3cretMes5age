@@ -233,6 +233,9 @@ func TestGetMsgHandler(t *testing.T) {
 				assert.Equal(t, tt.token, s.lastUsedToken)
 				assert.Equal(t, tt.expectedStatus, rec.Code)
 				assert.Equal(t, tt.expectedMsg, rec.Body.String())
+				// One-time secret responses must never be cacheable: a
+				// cached copy would let a second reader get the message.
+				assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
 			}
 		})
 	}
