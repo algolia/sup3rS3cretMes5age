@@ -423,7 +423,7 @@ The application supports 5 languages with automatic detection and seamless switc
 - ✅ No page reload required
 - ✅ Language preference persisted in URL
 - ✅ Dynamic updates of all UI elements
-- ✅ Translates meta tags for SEO
+- ✅ Translates meta tags (title, description, Open Graph) for interactive users
 - ✅ Updates HTML `lang` attribute for accessibility
 - ✅ Translations loaded asynchronously (only active language)
 
@@ -434,6 +434,20 @@ The application supports 5 languages with automatic detection and seamless switc
 - **i18n System**: Centralized in `utils.js` with `data-i18n` attributes
 - **Translation Files**: JSON format in `/static/locales/`
 - **Size Impact**: ~1KB per language file (loaded on-demand)
+
+### Known Limitations
+
+- **Social media previews are not localized.** Open Graph and meta tags are
+  translated client-side, but link-preview crawlers (Facebook, Slack, …) do
+  not execute JavaScript, so shared links always preview the shipped English
+  metadata. Fully localized previews would require server-side rendering of
+  the pages' meta tags.
+- **Post-deploy cache window.** HTML pages and locale files share the same
+  5-minute cache TTL, but entries expire independently: a locale cached just
+  before a deploy can outlive an HTML entry by a few minutes, briefly pairing
+  new markup with the previous locale's strings (missing keys fall back to
+  the original English text). Versioned locale URLs would eliminate this;
+  the bounded window was accepted to avoid extra build machinery.
 
 ## 📸 Screenshots
 
