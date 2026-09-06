@@ -6,19 +6,16 @@
  * with automatic base64 decoding. All event handlers are CSP-compliant.
  */
 
-import { $, isValidLanguage, primaryLanguageTag, setupLanguage, translate } from './utils.js';
-
-// Language initialization promise, awaited by dynamic error rendering so
-// user-facing strings land in the active locale
-let languageReady;
+import { $, isValidLanguage, primaryLanguageTag, setupLanguage, translate, whenLanguageReady } from './utils.js';
 
 // Initialize clipboard and language manager on DOMContentLoaded
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize clipboard functionality
     new ClipboardJS('.btn');
 
-    // Initialize language manager
-    languageReady = setupLanguage();
+    // Initialize language manager; dynamic error rendering awaits it through
+    // whenLanguageReady(), which also covers in-flight language switches
+    setupLanguage();
 });
 
 // Slider input handler
@@ -65,9 +62,10 @@ function validateSecretUrl(token) {
 async function showSecret() {
     // Dynamic error strings must render in the active language: a fast
     // failure (invalid/expired token) can otherwise land before the locale
-    // load resolves and write English into the textarea. Awaiting a settled
+    // load resolves and write English into the textarea, and a switch still
+    // in flight would render the previous language. Awaiting a settled
     // promise resolves immediately, so this is free in the common case.
-    await languageReady;
+    await whenLanguageReady();
 
     const params = (new URL(window.location)).searchParams;
 
