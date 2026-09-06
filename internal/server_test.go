@@ -113,6 +113,11 @@ func TestServerSecurityHeaders(t *testing.T) {
 	assert.Equal(t, "nosniff", rec.Header().Get("X-Content-Type-Options"))
 	assert.Equal(t, "DENY", rec.Header().Get("X-Frame-Options"))
 	assert.Contains(t, rec.Header().Get("Content-Security-Policy"), "default-src 'self'")
+	// The CSP must not allow inline styles: the pages carry no <style>
+	// elements or style attributes (initial hidden state lives in the
+	// stylesheet's .hidden utility), so permitting them would only widen
+	// the injection surface.
+	assert.NotContains(t, rec.Header().Get("Content-Security-Policy"), "unsafe-inline")
 }
 
 func TestServerRedirect(t *testing.T) {
