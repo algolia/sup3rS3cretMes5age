@@ -43,11 +43,16 @@ export function detectLanguage() {
     return langParam;
   }
 
-  // Check browser language preference
-  const browserLang = navigator.language || navigator.userLanguage;
-  const langCode = primaryLanguageTag(browserLang);
-  if (isValidLanguage(langCode)) {
-    return langCode;
+  // Check browser language preferences in order. The server q-weights the
+  // whole Accept-Language list, so only iterating the first preference here
+  // would disagree with Content-Language when the top preference is not
+  // supported (e.g. ['pt-BR', 'fr'] must resolve to fr, not English).
+  const candidates = navigator.languages || [navigator.language || navigator.userLanguage];
+  for (const candidate of candidates) {
+    const langCode = primaryLanguageTag(candidate);
+    if (isValidLanguage(langCode)) {
+      return langCode;
+    }
   }
 
   // Default to English
