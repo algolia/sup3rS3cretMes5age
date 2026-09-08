@@ -21,19 +21,19 @@
       $$: "readonly",
       alert: "readonly"
     }
-  };                                                                                                                                                                        
-                                                                                                                                                                            
-  export default [                                                                                                                                                          
-    {                                                                                                                                                                       
-      files: ["web/static/**/*.js"],                                                                                                                                        
+  };
+
+  export default [
+    {
+      files: ["web/static/**/*.js"],
       ignores: ["web/static/clipboard-*js"],
-      languageOptions: {                                                                                                                                                    
-        sourceType: "module",                                                                                                                                               
-        globals: { ...browserGlobals.globals }                                                                                                                              
-      },                                                                                                                                                                    
-      rules: {                                                                                                                                                              
-        "no-undef": "error",                                                                                                                                                
-        "no-unused-vars": "warn"                                                                                                                                            
-      }                                                                                                                                                                     
-    }                                                                                                                                                                       
+      languageOptions: {
+        sourceType: "module",
+        globals: { ...browserGlobals.globals }
+      },
+      rules: {
+        "no-undef": "error",
+        "no-unused-vars": "warn"
+      }
+    }
   ];
