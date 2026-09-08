@@ -53,12 +53,13 @@ RUN set -eu && \
     done && \
     node-minify --compressor lightningcss --input application.css --output min.application.css && mv min.application.css application.css && \
     ls -l && \
-    cd locales && \
-    for fi in *.json; \
-    do \
-      node-minify --compressor jsonminify --input "$fi" --output "min.$fi" && mv "min.$fi" "$fi"; \
-    done && \
-    ls -l
+    if [ -d locales ]; then \
+      cd locales && \
+      for fi in *.json; do \
+        node-minify --compressor jsonminify --input "$fi" --output "min.$fi" && mv "min.$fi" "$fi"; \
+      done && \
+      ls -l; \
+    fi
 
 # Multi-stage build with security hardening
 FROM alpine:latest
