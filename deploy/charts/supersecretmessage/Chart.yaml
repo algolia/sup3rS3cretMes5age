@@ -1,6 +1,9 @@
 apiVersion: v2
 name: supersecretmessage
 description: A Helm chart for Kubernetes
+# Icon is rendered by Helm Hub/Artifact Hub listings (hadolint-style INFO
+# on every helm lint run otherwise).
+icon: https://raw.githubusercontent.com/algolia/sup3rS3cretMes5age/master/web/static/icons/android-chrome-192x192.png
 
 # A chart can be either an 'application' or a 'library' chart.
 #
