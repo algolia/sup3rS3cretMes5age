@@ -56,7 +56,7 @@ RUN set -eu && \
     ls -l && \
     if [ -d locales ]; then \
       for fi in locales/*.json; do \
-        node-minify --compressor jsonminify --input "$fi" --output "locales/min.$fi" && mv "locales/min.$fi" "$fi"; \
+        node-minify --compressor jsonminify --input "$fi" --output "${fi%.json}.min.json" && mv "${fi%.json}.min.json" "$fi"; \
       done && \
       ls -l locales; \
     fi
