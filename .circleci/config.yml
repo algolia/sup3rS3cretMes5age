@@ -111,16 +111,15 @@ jobs:
             fi
             /home/circleci/bin/hadolint --version
       - run:
-          name: Install docker compose
-          # Native package (compose v2 is a Docker CLI plugin). cimg/base
-          # ships its own baked plugin which shadows this one, so the
-          # resolved version is image-controlled — accepted here because
-          # "docker compose config" schema is stable across v2.x, unlike
-          # the hadolint/helm lint results whose releases change outcomes
-          command: |
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq docker-compose-v2
-            docker compose version
+          name: Check docker compose
+          # cimg/base ships compose as the docker-compose-plugin (a Docker
+          # CLI plugin), which is what "docker compose config" resolves —
+          # no install needed. Ubuntu's docker-compose-v2 package is not an
+          # option: it ships the same cli-plugins path and dpkg refuses to
+          # overwrite the image's plugin (exit 100, overwrite conflict).
+          # The resolved version is image-controlled — accepted, because
+          # "docker compose config" schema is stable across v2.x.
+          command: docker compose version
       - run:
           name: Install helm
           command: |
