@@ -131,7 +131,40 @@ Run all of the following before committing:
 - `npx eslint --config eslint.config.mjs`
 - `make test`
 
-## Common Tasks
+## PR Code Review Instructions
+
+When performing code reviews on pull requests in this repository, apply the checklists below in addition to the general validation steps. This service's core guarantee is **one-time secret retrieval** — a review must flag anything that weakens it, at any layer (crypto, HTTP semantics, caching, logging).
+
+### Security review checklist
+
+- **One-time token semantics**: Vault one-time tokens use exactly 2 uses (1 create, 1 read) and messages are deleted on retrieval. Flag anything that adds a second read path, extends token uses, or makes retrieval a *get* instead of a *get-and-delete*.
+- **Token validation**: retrieval tokens are validated against a strict format regex (`^hv[sb]\.…`) *before* any Vault lookup — the token is concatenated into a Vault path, so the regex is the path-injection guard. Flag regex relaxations, lookups before validation, or tokens accepted from request bodies/headers without validation.
+- **Cache-Control on one-time responses**: retrieval responses (`/secret?token=…`, `/getmsg?token=…`) must carry `no-store` (plus `private` where set). A cacheable one-time response lets a second reader get a cached copy after the first read consumed the Vault token.
+- **Access logs must not contain one-time tokens**: request logging must redact token-bearing query parameters (any param whose name contains `token` — `token`, `filetoken`). A token in the access log is a second copy of the secret, readable before the first retrieval.
+- **Content-Security-Policy**: `style-src` must not include `'unsafe-inline'`. Pages carry no `<style>` elements or `style` attributes — initial hidden state lives in the stylesheet (`.hidden` utility), and scripts reveal elements by assigning `element.style` (a JS property, never restricted by inline-style CSP rules). Flag new inline styles or CSP relaxations.
+- **Input validation bounds**: message ≤ 1 MB, TTL parsed duration within 1 min–7 days, file ≤ 50 MB with path-traversal characters (`..`, `/`, `\`) rejected in filenames. Flag removed bounds or validation applied after use.
+- **Error hygiene**: client-facing errors must not embed raw Vault errors or echo untrusted input (e.g. token format errors carry a constant message). Flag `err` passed straight into `echo.NewHTTPError(5xx, err)`.
+- **Rate limiting and body limits**: 10 RPS/burst 20 per client IP and 50 M body limit must stay in place. Flag skipper additions for authenticated-looking paths (there is no auth — every path is unauthenticated).
+
+### RFC compliance checklist
+
+- **RFC 9110 — Range requests**: gzip must skip requests carrying a `Range` header. A gzipped 206 would pair a gzip body with identity `Content-Range`/`Content-Length`, corrupting any range-capable client's download. Flag gzip-skipper removals and handlers that mutate bodies on 206 responses.
+- **RFC 9110 — Accept-Language**: q-values are case-insensitive (`en;Q=0` is valid), restricted to 0–1, out-of-range/malformed weights default to 1.0, region subtags normalize (`fr-CA` → `fr`). Flag parsers that treat `Q=` as invalid or accept q > 1.
+- **RFC 9110 — caching semantics**: `Vary` must list every header the response varies on — `Accept-Language` is set by handlers because `Content-Language` depends on it; `Vary: Accept-Encoding` belongs to the gzip middleware. Cache tiers use named constants (HTML/JS/CSS/locales 5 min, icons 24 h, fonts 7 days `must-revalidate`, no `immutable` — filenames are not content-hashed). Flag hardcoded `Vary` values in generic handlers and `immutable` on unhashed filenames.
+- **RFC 9110 — Content-Language negotiation**: an unsupported `?lang` value must fall through to the `Accept-Language` header order (not shadow it); the language state (`<html lang>`, selector, `Content-Language`) must always reflect what is actually rendered.
+
+### How other agents should use these reviews
+
+Other agents (Claude Code, or any coding agent with GitHub access) triage Copilot reviews on this repository as follows:
+
+1. **Fetch the review**: `gh api repos/algolia/sup3rS3cretMes5age/pulls/<PR>/reviews` (list) then `/reviews/<review-id>/comments` (inline findings), or the GitHub MCP equivalent. Agent reviews also surface as `pullrequestreview` events.
+2. **Verify against code, never the description**: check each finding's `path`/`line` against the actual file content before agreeing — findings routinely cite the right concept with the wrong location, or a condition that no longer exists after later commits.
+3. **Triage protocol**: classify each finding as *valid* (implement), *wontfix* (document the rationale in the thread — e.g. the `Object.entries().find()` lookup in `lookupTranslation` is intentional: it avoids computed member access, which scanners flag as a generic-object-injection sink), or *superseded* (already fixed by a later commit). Quantify any performance claim before accepting it (e.g. a 25-key translations object with ~20–40 lookups per interaction is not perf-relevant).
+4. **Security findings are never closed silently**: a wontfix on a security or RFC checklist item requires the documented reasoning above to stay in the thread, so the next reviewer (human or agent) sees why.
+5. **Regression pins**: every accepted finding on a security/RFC checklist item should land with a test (`internal/*_test.go`) that fails if the behavior regresses — e.g. `TestServerSecurityHeaders` asserts the CSP carries no `'unsafe-inline'`.
+6. **Re-request review** after fixes land so the next Copilot pass verifies the thread resolutions.
+
+## Project Reference
 
 ### Key Application Features
 - **Self-Destructing Messages**: Messages are automatically deleted after first read
@@ -158,27 +191,32 @@ Run all of the following before committing:
 ```
 .
 ├── cmd/sup3rS3cretMes5age/
-│   └── main.go                     # Application entry point (23 lines)
+│   └── main.go                     # Application entry point
 ├── internal/                       # Core application logic
-│   ├── config.go                   # Configuration handling (77 lines)
-│   ├── handlers.go                 # HTTP request handlers (88 lines)
-│   ├── handlers_test.go            # Handler unit tests (87 lines)
-│   ├── server.go                   # Web server setup (94 lines)
-│   ├── vault.go                    # Vault integration (174 lines)
-│   └── vault_test.go               # Vault unit tests (66 lines)
+│   ├── config.go                   # Configuration handling
+│   ├── config_test.go              # Configuration unit tests
+│   ├── handlers.go                 # HTTP request handlers (secrets, validation)
+│   ├── handlers_test.go            # Handler unit tests
+│   ├── server.go                   # Web server setup (middleware, routes, security headers)
+│   ├── server_test.go              # Server unit tests (headers, cache tiers, gzip)
+│   ├── vault.go                    # Vault integration (one-time tokens, renewal)
+│   └── vault_test.go               # Vault unit tests
 ├── web/static/                     # Frontend assets (HTML, CSS, JS)
-│   ├── index.html                  # Main page (5KB)
-│   ├── getmsg.html                 # Message retrieval page (7.8KB)
-│   ├── application.css             # Styling (2.3KB)
-│   ├── clipboard-2.0.11.min.js     # Copy functionality (9KB)
+│   ├── index.html                  # Main page (message creation)
+│   ├── getmsg.html                 # Message retrieval page
+│   ├── index.js, getmsg.js, utils.js  # Frontend logic (classic scripts; utils.js defines $ helpers)
+│   ├── application.css             # Styling (includes .hidden utility for CSP-safe initial state)
+│   ├── clipboard-2.0.11.min.js     # Vendored copy functionality (lint-ignored)
 │   ├── montserrat.css              # Font definitions
 │   ├── robots.txt                  # Search engine rules
 │   ├── fonts/                      # Self-hosted Montserrat font files
-│   └── icons/                      # Favicon and app icons
+│   └── icons/                      # Favicon, app icons and PWA manifest
 ├── deploy/                         # Docker and deployment configs
-│   ├── Dockerfile                  # Multi-stage container build
+│   ├── Dockerfile                  # Multi-stage container build (minify stage, layer caching)
 │   ├── docker-compose.yml          # Local development stack (Vault + App)
-│   └── charts/supersecretmessage/  # Helm c(lint + test pipeline)
+│   └── charts/supersecretmessage/  # Helm chart for Kubernetes deployment
+├── .circleci/config.yml            # CI pipeline (lint, jslint, test)
+├── .dockerignore                   # Build-context exclusions (VCS, CI, docs, AI-agent config)
 ├── eslint.config.mjs
 ├── Makefile
 ├── README.md
@@ -187,17 +225,18 @@ Run all of the following before committing:
 ```
 
 #### Package.json Equivalent (go.mod)
+Direct requirements (verify against `go.mod` for exact versions — they move):
 ```go
 module github.com/algolia/sup3rS3cretMes5age
 
-go 1.25.1
+go 1.26.1
 
 require (
-    github.com/hashicorp/vault v1.21.0
-    github.com/hashicorp/vault/api v1.22.0
-    github.com/labstack/echo/v4 v4.13.4
-    github.com/stretchr/testify v1.11.1
-    golang.org/x/crypto v0.45.0
+    github.com/hashicorp/vault v1.21.4
+    github.com/hashicorp/vault/api v1.23.0
+    github.com/labstack/echo/v4 v4.15.4
+    github.com/stretchr/testify v1.12.1
+    golang.org/x/crypto v0.56.0
 )
 ```
 
@@ -281,11 +320,12 @@ make clean         # Remove docker-compose containers
 ```
 
 ### CircleCI Pipeline
-The project uses CircleCI with two jobs:
-1. **lint**: Format checking (gofmt), golangci-lint v2.6.0
-2. **test**: Unit tests via `make test`
+The project uses CircleCI with three jobs:
+1. **lint**: Format checking (gofmt), golangci-lint
+2. **jslint**: JavaScript linting via pinned ESLint (see `eslint.config.mjs`)
+3. **test**: Unit tests via `make test`
 
-Pipeline runs on Go 1.25 docker image (`cimg/go:1.25`).
+Pipeline runs on Go 1.26 docker image (`cimg/go:1.26`) for Go jobs and Node 25 (`cimg/node:25.8`) for jslint.
 
 ### Helm Deployment
 Helm chart located in `deploy/charts/supersecretmessage/`:
