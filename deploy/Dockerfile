@@ -40,9 +40,10 @@ COPY web/ ./
 
 # Minify JS and CSS files. set -eu aborts the build if any node-minify
 # invocation fails — without it only the trailing mv was skipped and the
-# loop continued, silently shipping the unminified file.
+# loop continued, silently shipping the unminified file. WORKDIR (not a
+# bare cd) switches into static/ — hadolint DL3003.
+WORKDIR /app/static
 RUN set -eu && \
-    cd static && \
     for fi in utils.js index.js getmsg.js; \
     do \
       node-minify --compressor terser --input "$fi" --output "min.$fi" && mv "min.$fi" "$fi"; \
@@ -54,15 +55,16 @@ RUN set -eu && \
     node-minify --compressor lightningcss --input application.css --output min.application.css && mv min.application.css application.css && \
     ls -l && \
     if [ -d locales ]; then \
-      cd locales && \
-      for fi in *.json; do \
-        node-minify --compressor jsonminify --input "$fi" --output "min.$fi" && mv "min.$fi" "$fi"; \
+      for fi in locales/*.json; do \
+        node-minify --compressor jsonminify --input "$fi" --output "locales/min.$fi" && mv "locales/min.$fi" "$fi"; \
       done && \
-      ls -l; \
+      ls -l locales; \
     fi
 
-# Multi-stage build with security hardening
-FROM alpine:latest
+# Multi-stage build with security hardening. Pinned base: a floating tag
+# re-resolves on every build, so the same commit can produce different
+# images (hadolint DL3007; the untagged alpine:latest also failed CI).
+FROM alpine:3.22
 
 ARG VERSION
 ARG BUILD_DATE
@@ -80,7 +82,10 @@ LABEL org.opencontainers.image.title="sup3rS3cretMes5age" \
   org.opencontainers.image.source="https://github.com/algolia/sup3rS3cretMes5age"
 
 
-# Install only necessary certificates and packages
+# Install only necessary certificates and packages. Package versions are
+# not pinned (hadolint DL3018 ignored): they track the pinned alpine 3.22
+# release, and exact pins break on alpine point releases.
+# hadolint ignore=DL3018
 RUN apk add --no-cache \
     ca-certificates \
     tzdata \
