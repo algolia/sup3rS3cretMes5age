@@ -46,8 +46,10 @@ config:
 livenessProbe:
   # It it the same that .Values.config.server.env. "SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS"
   port: "80"
-  # Path of probe
-  path: "/msg"
+  # Path of probe: /health is the purpose-built health endpoint (light,
+  # and excluded from the app's access logs — /msg would render a full
+  # page on every probe).
+  path: "/health"
   # When a probe fails, Kubernetes will try failureThreshold times before giving up
   failureThreshold: 2
   # Number of seconds after the container has started before probe initiates
@@ -63,8 +65,8 @@ livenessProbe:
 readinessProbe:
   # It it the same that .Values.config.server.env. "SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS"
   port: "80"
-  # Path of probe
-  path: "/msg"
+  # Path of probe (see livenessProbe: /health, not /msg)
+  path: "/health"
   # When a probe fails, Kubernetes will try failureThreshold times before giving up
   failureThreshold: 2
   # Number of seconds after the container has started before probe initiates
