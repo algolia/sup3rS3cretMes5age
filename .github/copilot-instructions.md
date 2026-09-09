@@ -353,7 +353,7 @@ make clean         # Remove docker-compose containers
 ```
 
 ### CircleCI Pipeline
-The project uses CircleCI with three jobs:
+The project uses CircleCI with four jobs:
 1. **deploy-check**: Check deployment files (Dockerfile, docker-compose, Helm chart) validity
 2. **lint**: Format checking (gofmt), golangci-lint
 3. **jslint**: JavaScript linting via pinned ESLint (see `eslint.config.mjs`)
