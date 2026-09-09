@@ -1,5 +1,11 @@
 version: 2.1
 
+# Tool versions for the deploy-check job. Pinned: lint results change with
+# linter releases, so the check must be reproducible. Bump a version below
+# (twice: the executor environment and the cache key that embeds it — cache
+# keys are static strings, so they cannot interpolate env vars).
+deploy_cache_key: &deploy_cache_key deploy-tools-hadolint-2.12.0-helm-3.16.4
+
 executors:
   golang:
     docker:
@@ -7,6 +13,14 @@ executors:
   node:
     docker:
       - image: cimg/node:25.8
+  # Docker CLI + compose plugin preinstalled — the deploy-check job only
+  # validates configs (compose config, hadolint, helm), no daemon builds.
+  base:
+    docker:
+      - image: cimg/base:2025.09
+    environment:
+      HADOLINT_VERSION: "2.12.0"
+      HELM_VERSION: "3.16.4"
 
 jobs:
   lint:
@@ -78,6 +92,67 @@ jobs:
           paths:
             - /home/circleci/.npm
 
+  deploy-check:
+    executor: base
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - *deploy_cache_key
+      - run:
+          name: Install hadolint (Dockerfile linter)
+          # Pinned: lint results change with linter releases, so the check
+          # must be reproducible
+          command: |
+            if [ ! -x /home/circleci/bin/hadolint ]; then
+              curl -sSfL -o /home/circleci/bin/hadolint \
+                "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-Linux-x86_64"
+              chmod +x /home/circleci/bin/hadolint
+            fi
+            /home/circleci/bin/hadolint --version
+      - run:
+          name: Install docker compose
+          # Native package (compose v2 is a Docker CLI plugin). cimg/base
+          # ships its own baked plugin which shadows this one, so the
+          # resolved version is image-controlled — accepted here because
+          # "docker compose config" schema is stable across v2.x, unlike
+          # the hadolint/helm lint results whose releases change outcomes
+          command: |
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq docker-compose-v2
+            docker compose version
+      - run:
+          name: Install helm
+          command: |
+            if [ ! -x /home/circleci/bin/helm ]; then
+              curl -sSfL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" \
+                | tar -xz -C /home/circleci/bin --strip-components=1 linux-amd64/helm
+            fi
+            /home/circleci/bin/helm version --short
+      - run:
+          name: Lint Dockerfile
+          # A Dockerfile error surfaces here instead of failing the first
+          # image build minutes later (or worse, at deploy time)
+          command: /home/circleci/bin/hadolint deploy/Dockerfile
+      - run:
+          name: Validate docker-compose
+          # compose config validates the file schema and variable
+          # interpolation without needing a daemon
+          command: docker compose -f deploy/docker-compose.yml config -q
+      - run:
+          name: Lint and render Helm charts
+          command: |
+            find deploy/charts -mindepth 1 -maxdepth 1 -type d | while read -r chart; do
+              echo "== lint $chart =="
+              /home/circleci/bin/helm lint "$chart"
+              echo "== render $chart =="
+              /home/circleci/bin/helm template "$chart" >/dev/null
+            done
+      - save_cache:
+          key: *deploy_cache_key
+          paths:
+            - /home/circleci/bin
+
 workflows:
   lint_test:
     jobs:
@@ -86,3 +161,4 @@ workflows:
       - test:
           requires:
             - lint
+      - deploy-check
