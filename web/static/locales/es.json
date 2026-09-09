@@ -1,6 +1,6 @@
 {
   "secret_message": "Mensaje Secreto",
-  "send_secret_message": "Enviar un mensaje secreto de uso único",
+  "send_secret_message": "Enviar un mensaje secreto de uso único y de solo lectura",
   "paste_message": "Pegue su mensaje aquí",
   "upload_file": "Subir archivo secreto:",
   "choose_file": "Elegir archivo",
@@ -8,7 +8,7 @@
   "time_to_expire": "Tiempo de expiración:",
   "submit_button": "Enviar",
   "copy_to_clipboard": "Copiar al portapapeles",
-  "get_secret_message": "Obtener su mensaje secreto de uso único",
+  "get_secret_message": "Obtener su mensaje secreto de uso único y de solo lectura",
   "drag_slider": "Arrastre el control deslizante para mostrar el mensaje secreto",
   "copy_button": "Copiar al portapapeles",
   "new_message_button": "Enviar un mensaje secreto",
