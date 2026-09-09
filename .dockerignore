@@ -18,5 +18,15 @@ eslint.config.mjs
 # Docs
 *.md
 
+# AI agents (CLAUDE.md/AGENTS.md/GEMINI.md match *.md; dotdirs need explicit entries)
+.claude
+.cursor
+.cursorignore
+.windsurf
+.aider*
+.codeium
+.continue
+.codex
+
 # Project files
 LICENSE
