@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"net"
 	"testing"
 
@@ -39,7 +40,8 @@ func TestStoreAndGet(t *testing.T) {
 	ln, c := createTestVault(t)
 	defer func() { _ = ln.Close() }()
 
-	v := NewVault(c.Address(), "secret/test/", c.Token())
+	v, err := NewVault(context.Background(), c.Address(), "secret/test/", c.Token())
+	assert.NoError(t, err)
 	secret := "my secret"
 	token, err := v.Store(secret, "")
 	if assert.NoError(t, err) {
@@ -53,7 +55,8 @@ func TestMsgCanOnlyBeAccessedOnce(t *testing.T) {
 	ln, c := createTestVault(t)
 	defer func() { _ = ln.Close() }()
 
-	v := NewVault(c.Address(), "secret/test/", c.Token())
+	v, err := NewVault(context.Background(), c.Address(), "secret/test/", c.Token())
+	assert.NoError(t, err)
 	secret := "my secret"
 	token, err := v.Store(secret, "")
 	if assert.NoError(t, err) {
@@ -65,8 +68,21 @@ func TestMsgCanOnlyBeAccessedOnce(t *testing.T) {
 	}
 }
 
+// TestNewVaultFailsFastOnUnreachableVault pins the fail-loud boot validation:
+// an unreachable Vault or an invalid token must surface as an error from
+// NewVault, not as a degraded store that 500s on every later request.
+func TestNewVaultFailsFastOnUnreachableVault(t *testing.T) {
+	_, err := NewVault(context.Background(), "http://invalid:9999", "secret/", "fake-token")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "vault connection or token validation failed")
+}
+
+// TestStoreWithInvalidAddress exercises the Store error path on a vault
+// constructed directly (bypassing NewVault's boot validation).
 func TestStoreWithInvalidAddress(t *testing.T) {
-	v := NewVault("http://invalid:9999", "secret/", "fake-token")
+	v := vault{address: "http://invalid:9999", prefix: "secret/", token: "fake-token"}
+
 	_, err := v.Store("msg", "1h")
 
 	assert.Error(t, err)
