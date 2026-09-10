@@ -101,11 +101,14 @@ func validateFileUpload(file *multipart.FileHeader) error {
 	return nil
 }
 
-// validateVaultToken checks the format of Vault-generated tokens
+// validateVaultToken checks the format of Vault-generated tokens. The
+// error carries a constant message: the token must never be reflected
+// back into the response or the access logs (the request logger records
+// the error string, so echoing the rejected token here would write it —
+// or an attacker-crafted lookalike — into the log file).
 func validateVaultToken(token string) error {
-	// Check token format
 	if !tokenRegex.MatchString(token) {
-		return fmt.Errorf("invalid token format: %s", token)
+		return fmt.Errorf("invalid token format")
 	}
 	return nil
 }
