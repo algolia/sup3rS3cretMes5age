@@ -205,16 +205,29 @@ func (s *Server) handler() http.Handler {
 // Parameter names are preserved (token, filetoken, lang, filename, ttl, …)
 // so debugging keeps its context; only the values are masked.
 func redactTokens(rawURI string) string {
-	u, err := url.Parse(rawURI)
-	if err != nil {
-		// Unparseable URI: drop the query entirely rather than risk
-		// logging a token we failed to redact.
+	// dropQuery removes everything from '?' onward: the fallback when the
+	// query cannot be parsed reliably enough to redact it.
+	dropQuery := func() string {
 		if idx := strings.Index(rawURI, "?"); idx >= 0 {
 			return rawURI[:idx]
 		}
 		return rawURI
 	}
-	q := u.Query()
+
+	u, err := url.Parse(rawURI)
+	if err != nil {
+		// Unparseable URI: drop the query entirely rather than risk
+		// logging a token we failed to redact.
+		return dropQuery()
+	}
+	// u.Query() would silently discard malformed pairs (e.g. a token value
+	// containing an invalid % escape), leaving such a token unredacted;
+	// parse the raw query explicitly and treat a failure like an
+	// unparseable URI.
+	q, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return dropQuery()
+	}
 	changed := false
 	for name := range q {
 		if strings.Contains(strings.ToLower(name), "token") {
