@@ -40,6 +40,10 @@ type vault struct {
 // service cannot store or retrieve secrets without a working Vault connection,
 // so failing loudly is preferable to serving 500s until the first request
 // hits the broken client.
+// bootValidationTimeout bounds the boot-time Vault requests (LookupSelf and
+// the capability checks): they must never hang startup indefinitely.
+const bootValidationTimeout = 30 * time.Second
+
 func NewVault(ctx context.Context, address string, prefix string, token string) (*vault, error) {
 	v := &vault{address: address, prefix: prefix, token: token}
 
@@ -48,12 +52,20 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 		return nil, fmt.Errorf("vault client initialization failed: %w", err)
 	}
 
-	lookup, err := c.Auth().Token().LookupSelfWithContext(ctx)
+	// Boot validation (lookup + capability checks) must not hang forever on
+	// a Vault that accepts connections but stops responding — a hung boot
+	// never starts the HTTP server, so no restart policy can help. Bound
+	// only the validation; the long-lived ctx keeps governing the renewal
+	// goroutine.
+	bootCtx, cancel := context.WithTimeout(ctx, bootValidationTimeout)
+	defer cancel()
+
+	lookup, err := c.Auth().Token().LookupSelfWithContext(bootCtx)
 	if err != nil {
 		return nil, fmt.Errorf("vault connection or token validation failed (check VAULT_ADDR and VAULT_TOKEN): %w", err)
 	}
 
-	if err := v.verifyCapabilities(ctx, c); err != nil {
+	if err := v.verifyCapabilities(bootCtx, c); err != nil {
 		return nil, err
 	}
 
@@ -65,23 +77,27 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 // operations the service performs: creating one-time tokens (auth/token/create)
 // and writing and reading the storage prefix. LookupSelf only proves
 // authentication; a token missing these capabilities would pass boot and
-// then fail on every secret operation, so the gap fails loudly here. If the
-// token cannot query its own capabilities at all, the check is skipped with
-// a warning rather than blocking a possibly-valid deployment.
+// then fail on every secret operation, so the gap fails loudly here. An
+// auth rejection on the capabilities query itself means the token cannot
+// self-inspect — the check degrades to a warning rather than blocking a
+// possibly-valid deployment — but any other error (transport, 5xx, …) fails
+// boot: starting with unverified capabilities would recreate the degraded
+// state this check exists to prevent.
 func (v vault) verifyCapabilities(ctx context.Context, c *api.Client) error {
 	caps, err := c.Sys().CapabilitiesSelfWithContext(ctx, "auth/token/create")
 	if err != nil {
-		log.Printf("warning: unable to verify Vault capabilities (sys/capabilities-self denied?): %v", err)
-		return nil
+		return v.capabilitiesQueryError(err)
 	}
-	if !hasAnyCapability(caps, "root", "update", "create") {
+	// Vault evaluates token creation as an update operation: a policy
+	// granting only "create" reports "create" here yet still gets denied
+	// on the actual create call.
+	if !hasAnyCapability(caps, "root", "update") {
 		return fmt.Errorf("vault token lacks the required capability on auth/token/create (need update; have %v)", caps)
 	}
 
 	caps, err = c.Sys().CapabilitiesSelfWithContext(ctx, v.prefix)
 	if err != nil {
-		log.Printf("warning: unable to verify Vault capabilities (sys/capabilities-self denied?): %v", err)
-		return nil
+		return v.capabilitiesQueryError(err)
 	}
 	if !hasAnyCapability(caps, "root", "create", "update") {
 		return fmt.Errorf("vault token lacks the required write capability on %s (need create or update; have %v)", v.prefix, caps)
@@ -90,6 +106,18 @@ func (v vault) verifyCapabilities(ctx context.Context, c *api.Client) error {
 		return fmt.Errorf("vault token lacks the required read capability on %s (have %v)", v.prefix, caps)
 	}
 	return nil
+}
+
+// capabilitiesQueryError decides the outcome of a failed capabilities query:
+// only an auth rejection is skippable (the token cannot self-inspect, but may
+// still be fully functional); everything else means Vault itself is
+// unreliable and the unverified-capability boot must fail.
+func (v vault) capabilitiesQueryError(err error) error {
+	if isTerminalTokenError(err) {
+		log.Printf("warning: unable to verify Vault capabilities (sys/capabilities-self denied): %v", err)
+		return nil
+	}
+	return fmt.Errorf("unable to verify Vault capabilities: %w", err)
 }
 
 // hasAnyCapability reports whether the capability list contains any of the
