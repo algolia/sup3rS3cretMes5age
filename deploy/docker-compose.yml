@@ -48,7 +48,13 @@ services:
     ports:
       - "8082:8082"
     depends_on:
-      - vault
+      vault:
+        condition: service_healthy
+    # The app validates its Vault token at boot and exits non-zero if Vault
+    # is unreachable (fail-loud by design). service_healthy above prevents
+    # the cold-start race; this restart policy covers any remaining
+    # transient failure so a boot error cannot become a permanent outage.
+    restart: unless-stopped
     networks:
       - secure-network
     # Enhanced security configurations
