@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/vault/api"
 	vaulthttp "github.com/hashicorp/vault/http"
@@ -206,3 +207,56 @@ path "secret/test/*" { capabilities = ["create", "read", "update"] }`
 		}
 	}
 }
+
+// TestRenewTokenStopsOnContextCancel pins the shutdown path of the renewal
+// lifecycle: with a renewable token whose watcher is running, cancelling the
+// context must stop the watcher and make renewToken return (no deadlock, no
+// leaked watcher). A regression to the old defects — synchronously blocking
+// Start() or a dead-watcher select — would hang here until the test timeout.
+func TestRenewTokenStopsOnContextCancel(t *testing.T) {
+	ln, c := createTestVault(t)
+	defer func() { _ = ln.Close() }()
+
+	// Renewable token with a short lease so the watcher is live and
+	// scheduling renewals while we wait for cancellation.
+	secret, err := c.Auth().Token().Create(&api.TokenCreateRequest{
+		Lease:     "60s",
+		Renewable: boolPtr(true),
+		Period:    "60s",
+	})
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	renewableClient, err := c.Clone()
+	if !assert.NoError(t, err) {
+		return
+	}
+	renewableClient.SetToken(secret.Auth.ClientToken)
+	lookup, err := renewableClient.Auth().Token().LookupSelfWithContext(context.Background())
+	if !assert.NoError(t, err) {
+		return
+	}
+	if assert.True(t, lookup.Data["renewable"].(bool)) {
+		assert.NotZero(t, leaseDuration(lookup), "LookupSelf must report a TTL to seed the watcher")
+	}
+
+	v := vault{address: c.Address(), prefix: "secret/test/", token: secret.Auth.ClientToken}
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		v.renewToken(ctx, renewableClient, lookup)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// renewToken returned promptly on cancellation.
+	case <-time.After(5 * time.Second):
+		assert.Fail(t, "renewToken did not return on context cancellation")
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }
