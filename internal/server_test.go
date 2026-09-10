@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -107,6 +108,57 @@ func TestServerSecurityHeaders(t *testing.T) {
 	assert.Equal(t, "nosniff", rec.Header().Get("X-Content-Type-Options"))
 	assert.Equal(t, "DENY", rec.Header().Get("X-Frame-Options"))
 	assert.Contains(t, rec.Header().Get("Content-Security-Policy"), "default-src 'self'")
+}
+
+// TestAccessLogRedactsTokens pins the access-log redaction: one-time Vault
+// tokens must never reach the logs — a logged token is a second copy of the
+// secret, readable before the first retrieval. Non-token query parameters
+// must survive for debugging context.
+func TestAccessLogRedactsTokens(t *testing.T) {
+	var logBuf bytes.Buffer
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+		AllowedOrigins:     []string{"*"},
+	}
+	handlers := NewSecretHandlers(&FakeSecretMsgStorer{})
+	server := NewServer(cnf, handlers)
+	server.echo.Logger.SetOutput(&logBuf)
+
+	token := "hvs.CABAAAAAAQAAAAAAAAAABBBBCCCCDDDDEEEE"
+	req := httptest.NewRequest(http.MethodGet,
+		"/secret?token="+token+"&lang=fr&filename=report.pdf&filetoken=hvs.SECOND", nil)
+	rec := httptest.NewRecorder()
+	server.handler().ServeHTTP(rec, req)
+
+	logged := logBuf.String()
+	assert.Contains(t, logged, "token=REDACTED", "token value must be redacted")
+	assert.Contains(t, logged, "filetoken=REDACTED", "filetoken value must be redacted")
+	assert.NotContains(t, logged, token, "the raw one-time token must never reach the logs")
+	assert.NotContains(t, logged, "hvs.SECOND", "the raw file token must never reach the logs")
+	assert.Contains(t, logged, "lang=fr", "non-token parameters must survive")
+	assert.Contains(t, logged, "filename=report.pdf", "non-token parameters must survive")
+}
+
+func TestRedactTokens(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"no query parameters stays untouched", "/msg", "/msg"},
+		{"non-token parameters stay untouched", "/msg?lang=fr&ttl=48h", "/msg?lang=fr&ttl=48h"},
+		{"token value redacted", "/secret?token=hvs.abc&lang=fr", "/secret?lang=fr&token=REDACTED"},
+		{"filetoken value redacted", "/getmsg?token=hvs.a&filetoken=hvs.b&filename=f.pdf",
+			"/getmsg?filename=f.pdf&filetoken=REDACTED&token=REDACTED"},
+		{"param name matching is case-insensitive", "/secret?Token=hvs.abc", "/secret?Token=REDACTED"},
+		{"unparseable query is returned unchanged", "/msg?%%zz", "/msg?%%zz"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, redactTokens(tt.input))
+		})
+	}
 }
 
 func TestServerRedirect(t *testing.T) {
