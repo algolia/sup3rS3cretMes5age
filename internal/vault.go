@@ -45,11 +45,12 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 		return nil, fmt.Errorf("vault client initialization failed: %w", err)
 	}
 
-	if _, err := c.Auth().Token().LookupSelfWithContext(ctx); err != nil {
+	lookup, err := c.Auth().Token().LookupSelfWithContext(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("vault connection or token validation failed (check VAULT_ADDR and VAULT_TOKEN): %w", err)
 	}
 
-	go v.renewToken(ctx, c)
+	go v.renewToken(ctx, c, lookup)
 	return v, nil
 }
 
@@ -170,21 +171,21 @@ func (v vault) newVaultClientWithToken(token string) (*api.Client, error) {
 // Vault authentication token before it expires. This ensures continuous
 // operation of the service without manual token refresh.
 //
-// The lifetime watcher is recreated whenever the current lease ends (DoneCh
+// renewToken runs in a background goroutine to automatically renew the main
+// Vault authentication token before it expires. This ensures continuous
+// operation of the service without manual token refresh.
+//
+// The lookup result obtained during NewVault's boot validation is passed in:
+// re-querying it here would open a window where a transient Vault/network
+// hiccup permanently disables renewal for an otherwise renewable token. The
+// lifetime watcher is recreated whenever the current lease ends (DoneCh
 // fires) — the previous implementation never exited its monitoring loop, so
 // after the first lease end it spun on a closed channel and never renewed
 // again. A retry backoff keeps the loop from spinning hot when Vault is
 // unreachable or the token cannot be renewed. The goroutine exits when ctx is
 // cancelled (server shutdown) or the token is not renewable (e.g. the Vault
 // dev root token), which needs no renewal.
-func (v vault) renewToken(ctx context.Context, c *api.Client) {
-	lookup, err := c.Auth().Token().LookupSelfWithContext(ctx)
-	if err != nil {
-		// NewVault already confirmed connectivity at boot; reaching here
-		// means Vault became unreachable. Renewal cannot proceed.
-		log.Printf("vault token renewal disabled: token lookup failed: %v", err)
-		return
-	}
+func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret) {
 	if renewable, ok := lookup.Data["renewable"].(bool); !ok || !renewable {
 		log.Println("vault token is not renewable; token renewal disabled")
 		return
