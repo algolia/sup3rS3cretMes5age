@@ -292,7 +292,10 @@ o secret-file.txt
 ## Configuration options
 
 * `VAULT_ADDR`: address of the Vault server used for storing the temporary secrets.
-* `VAULT_TOKEN`: Vault token used to authenticate to the Vault server.
+* `VAULT_TOKEN`: Vault token used to authenticate to the Vault server. The token must have these capabilities, verified at startup:
+  * `update` on `auth/token/create` — to mint the one-time retrieval tokens;
+  * `create`/`update` **and** `read` on the storage prefix (default `cubbyhole/`) — to store and read the secrets.
+  The token's own `lookup-self`/`renew-self` access comes from Vault's `default` policy. `sys/capabilities-self` is optional: when denied, the startup check is skipped with a warning instead of blocking a possibly-valid deployment.
 * `SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS`: HTTP binding address (e.g. `:80`).
 * `SUPERSECRETMESSAGE_HTTPS_BINDING_ADDRESS`: HTTPS binding address (e.g. `:443`).
 * `SUPERSECRETMESSAGE_HTTPS_REDIRECT_ENABLED`: whether to enable HTTPS redirection or not (e.g. `true`).
