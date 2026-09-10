@@ -433,3 +433,27 @@ func TestRateLimitSpoofedHeadersShareOneBucket(t *testing.T) {
 	assert.True(t, saw429,
 		"15 requests from one RemoteAddr with rotating X-Forwarded-For must exhaust one shared bucket (no 429 seen: each spoof got a fresh bucket)")
 }
+
+// TestRateLimitExtractorErrorFailsClosedWith429 pins the extractor-error
+// path: Echo routes IdentifierExtractor errors to RateLimiterConfig's
+// ErrorHandler (not DenyHandler), whose default would answer 403 with the
+// raw error. An unusable client identifier must fail closed with the same
+// constant 429 response as an exhausted bucket.
+func TestRateLimitExtractorErrorFailsClosedWith429(t *testing.T) {
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+	}
+	e := echo.New()
+	setupMiddlewares(e, cnf)
+	e.GET("/probe", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/probe", nil)
+	req.RemoteAddr = "not-an-address"
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
+}

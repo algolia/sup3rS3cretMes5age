@@ -342,6 +342,15 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 				"error": "rate limit exceeded",
 			})
 		},
+		// Echo routes IdentifierExtractor errors here, not to DenyHandler;
+		// the default ErrorHandler would answer 403 with the raw error.
+		// An unusable client identifier must fail closed with the same
+		// constant 429 response as an exhausted bucket.
+		ErrorHandler: func(ctx echo.Context, err error) error {
+			return ctx.JSON(http.StatusTooManyRequests, map[string]string{
+				"error": "rate limit exceeded",
+			})
+		},
 	}))
 
 	// Keep the previous JSON access log format while moving off deprecated Logger middleware.
