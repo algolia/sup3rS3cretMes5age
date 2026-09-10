@@ -155,7 +155,9 @@ func TestRedactTokens(t *testing.T) {
 		{"filetoken value redacted", "/getmsg?token=hvs.a&filetoken=hvs.b&filename=f.pdf",
 			"/getmsg?filename=f.pdf&filetoken=REDACTED&token=REDACTED"},
 		{"param name matching is case-insensitive", "/secret?Token=hvs.abc", "/secret?Token=REDACTED"},
-		{"unparseable query is returned unchanged", "/msg?%%zz", "/msg?%%zz"},
+		// A control character makes url.Parse fail outright; the query must
+		// be dropped rather than logged unredacted (it carries a token here).
+		{"unparseable URI drops the query, path kept", "/msg?token=hvs.AAA\x00", "/msg"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
