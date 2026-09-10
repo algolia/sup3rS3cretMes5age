@@ -457,3 +457,40 @@ func TestRateLimitExtractorErrorFailsClosedWith429(t *testing.T) {
 
 	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
 }
+
+// TestRateLimitAppendedXFFFieldIsHonored pins the multi-field handling: a
+// trusted proxy that APPENDS its entry as a second X-Forwarded-For header
+// field must not be ignored — Header.Get would return only the
+// attacker-controlled first field and rotate buckets per request.
+func TestRateLimitAppendedXFFFieldIsHonored(t *testing.T) {
+	proxy := parseTrustedProxies("10.0.0.0/8")
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+		TrustedProxies:     proxy,
+	}
+	e := echo.New()
+	setupMiddlewares(e, cnf)
+	e.GET("/probe", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	saw429 := false
+	for i := 0; i < 15; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/probe", nil)
+		req.RemoteAddr = "10.0.0.1:55555" // trusted proxy
+		// Attacker sends the first field with a fresh address each time;
+		// the proxy appends the real client as a second field.
+		req.Header["X-Forwarded-For"] = []string{fmt.Sprintf("1.2.3.%d", i), "203.0.113.7"}
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if rec.Code == http.StatusTooManyRequests {
+			saw429 = true
+			break
+		}
+		assert.Equal(t, http.StatusOK, rec.Code, "unexpected status on request %d", i+1)
+	}
+
+	assert.True(t, saw429,
+		"appended real-client field must dominate: all requests share one bucket (fresh attacker field must not rotate buckets)")
+}
