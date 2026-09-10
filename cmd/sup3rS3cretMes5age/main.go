@@ -27,6 +27,13 @@ func main() {
 	// Load configuration
 	conf := internal.LoadConfig()
 
+	// Derive the supported UI languages from the locales directory (the
+	// single source of truth for the language list)
+	if err := internal.InitSupportedLanguages("static/locales"); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize supported languages: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Create server with handlers
 	handlers := internal.NewSecretHandlers(internal.NewVault("", conf.VaultPrefix, ""))
 	server := internal.NewServer(conf, handlers)

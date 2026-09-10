@@ -210,12 +210,23 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 		MaxAge:       86400,
 	}))
 
-	// Limit to 5 RPS (burst 10) (only human should use this service)
+	// Enable Gzip compression for all responses except Range requests:
+	// compressing a 206 Partial Content response would replace the body with
+	// gzip data while Content-Range/Content-Length still describe the
+	// identity representation (RFC 9110 range semantics), corrupting any
+	// range-capable client's download.
+	e.Use(middleware.GzipWithConfig(middleware.GzipConfig{
+		Skipper: func(c echo.Context) bool {
+			return c.Request().Header.Get("Range") != ""
+		},
+	}))
+
+	// Limit to 10 RPS (burst 20) (only human should use this service)
 	e.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
 		Store: middleware.NewRateLimiterMemoryStoreWithConfig(
 			middleware.RateLimiterMemoryStoreConfig{
-				Rate:      5,
-				Burst:     10,
+				Rate:      10,
+				Burst:     20,
 				ExpiresIn: 1 * time.Minute,
 			},
 		),
@@ -278,12 +289,17 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 	}))
 
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
-		XSSProtection:         "1; mode=block",
-		ContentTypeNosniff:    "nosniff",
-		XFrameOptions:         "DENY",
-		HSTSMaxAge:            31536000,
-		HSTSPreloadEnabled:    true,
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'",
+		XSSProtection:      "1; mode=block",
+		ContentTypeNosniff: "nosniff",
+		XFrameOptions:      "DENY",
+		HSTSMaxAge:         31536000,
+		HSTSPreloadEnabled: true,
+		// style-src forbids inline styles entirely: the pages carry no
+		// <style> elements or style attributes (initial hidden state lives
+		// in application.css's .hidden utility). getmsg.js/index.js reveal
+		// elements by assigning element.style — a JS property, never
+		// restricted by inline-style CSP rules.
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'",
 	}))
 
 	e.Use(middleware.BodyLimit("50M"))
@@ -301,12 +317,23 @@ func setupRoutes(e *echo.Echo, handlers *SecretHandlers) {
 
 	e.Any("/health", healthHandler)
 
+	// API secret endpoints
 	e.GET("/secret", handlers.GetMsgHandler)
 	e.POST("/secret", handlers.CreateMsgHandler)
 
-	e.File("/msg", "static/index.html")
+	// HTML page handlers
+	e.GET("/msg", indexHandler)
+	e.GET("/getmsg", getmsgHandler)
 
-	e.File("/getmsg", "static/getmsg.html")
-
-	e.Static("/static", "static")
+	// Static assets with tiered caching. Locales share the short tier so a
+	// deploy's new HTML and translations expire together — a longer locale
+	// TTL would leave browsers pairing fresh HTML with stale JSON. Font
+	// filenames are not content-hashed, so no "immutable": 7 days bounds
+	// the staleness window while keeping revalidation cheap.
+	static := e.Group("/static")
+	staticMethods := []string{"GET", "HEAD"}
+	static.Match(staticMethods, "/fonts/*", cacheHandler(fontsCacheControl))
+	static.Match(staticMethods, "/icons/*", cacheHandler(iconsCacheControl))
+	static.Match(staticMethods, "/locales/*", cacheHandler(shortCacheControl))
+	static.Match(staticMethods, "/*", cacheHandler(shortCacheControl))
 }

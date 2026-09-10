@@ -1,14 +1,350 @@
 /**
- * DOM Helper Functions
- * Provides convenient shortcuts for querySelector and querySelectorAll
+ * Utility Functions Module
+ * 
+ * This module provides core utility functions for the sup3rS3cretMes5age application:
+ * 
+ * DOM Helpers:
+ * - $() and $$(): jQuery-like selectors for querySelector and querySelectorAll
+ * 
+ * Internationalization (i18n):
+ * - detectLanguage(): Auto-detects user language from URL, browser, or defaults to English
+ * - loadTranslations(): Fetches and applies translation JSON files dynamically
+ * - applyTranslations(): Updates DOM elements with data-i18n attributes
+ * - translate(): Translates a single key with a fallback
+ * - switchLanguage(): Changes active language with URL persistence
+ * 
+ * All functions are exported as ES6 modules and are CSP-compliant.
  */
 
 // Returns the first element matching the CSS selector
-function $(selector) {
+export function $(selector) {
   return document.querySelector(selector);
 }
 
 // Returns all elements matching the CSS selector
-function $$(selector) {
+export function $$(selector) {
   return document.querySelectorAll(selector);
+}
+
+// Language management functions - simplified and fixed
+// Request ID counter to prevent race conditions in language switching
+let translationRequestId = 0;
+
+// Language whose translations are currently applied to the DOM; null until
+// the first locale loads successfully. Used to report what is actually
+// rendered when a new locale and its English fallback both fail to load.
+let renderedLanguage = null;
+
+// Promise for the latest language load (initial setup or in-flight switch).
+// Dynamic user-facing strings must await whenLanguageReady() before
+// rendering: awaiting only the initial setup promise would let an error that
+// overlaps a language switch land in the previous language.
+let languagePromise = Promise.resolve();
+
+// Resolve when the most recent language load (setup or switch) has settled,
+// i.e. when translate() reflects the currently selected language.
+export function whenLanguageReady() {
+  return languagePromise;
+}
+
+export function detectLanguage() {
+  // Check URL parameter first (region subtags and case normalized away)
+  const urlParams = new URLSearchParams(window.location.search);
+  const langParam = primaryLanguageTag(urlParams.get('lang'));
+  if (isValidLanguage(langParam)) {
+    return langParam;
+  }
+
+  // Check browser language preferences in order. The server q-weights the
+  // whole Accept-Language list, so only iterating the first preference here
+  // would disagree with Content-Language when the top preference is not
+  // supported (e.g. ['pt-BR', 'fr'] must resolve to fr, not English).
+  const candidates = navigator.languages || [navigator.language || navigator.userLanguage];
+  for (const candidate of candidates) {
+    const langCode = primaryLanguageTag(candidate);
+    if (isValidLanguage(langCode)) {
+      return langCode;
+    }
+  }
+
+  // Default to English
+  return 'en';
+}
+
+// Supported languages, initialized from locales-manifest.json (the single
+// source of truth, shared with the server) by setupLanguage. Empty until the
+// manifest loads, so nothing is considered valid before that.
+let supportedLanguages = [];
+
+// Load the language manifest. On failure the list stays empty and every
+// language resolves to the English default — the original HTML text stays
+// visible, matching the locale-fetch failure behavior.
+async function loadLanguageManifest() {
+  try {
+    const response = await fetch('/static/locales-manifest.json');
+    if (!response.ok) {
+      throw new Error(`HTTP error ${response.status} while loading /static/locales-manifest.json`);
+    }
+    const manifest = await response.json();
+    if (Array.isArray(manifest.languages) && manifest.languages.length > 0) {
+      supportedLanguages = manifest.languages;
+    }
+  } catch (error) {
+    console.error('Failed to load language manifest:', error);
+  }
+}
+
+// Native display name for a language code (e.g. "de" -> "Deutsch"), provided
+// by the browser's CLDR data so new languages need no label table.
+function nativeLanguageName(code) {
+  try {
+    const name = new Intl.DisplayNames([code], { type: 'language' }).of(code);
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  } catch {
+    return code.toUpperCase();
+  }
+}
+
+// Normalize a language tag to its primary subtag, mirroring the server-side
+// primaryLanguageTag(): "fr-CA" -> "fr", "FR" -> "fr". Keeps client-side
+// language handling (detection, cross-page navigation) consistent with the
+// server's Content-Language decision.
+export function primaryLanguageTag(tag) {
+  return String(tag ?? '').trim().toLowerCase().split(/[-_]/)[0];
+}
+
+// Validate if the language is supported
+export function isValidLanguage(lang) {
+  return supportedLanguages.includes(lang);
+}
+
+// Load translations for the specified language
+// requestId guards against race conditions from rapid language switching.
+// Returns the language whose translations were actually applied (which may
+// differ from the requested one if the fetch failed and English was used as
+// fallback), or null when a newer request superseded this one.
+export async function loadTranslations(language, requestId = null) {
+  try {
+    const response = await fetch(`/static/locales/${language}.json`);
+    if (!response.ok) {
+      throw new Error(`HTTP error ${response.status} while loading /static/locales/${language}.json`);
+    }
+
+    const translations = await response.json();
+
+    // Guard against stale requests: only apply if this is the latest request
+    if (requestId !== null && requestId !== translationRequestId) {
+      // Discarding stale translation request
+      return null;
+    }
+
+    // Store translations in a global object
+    window.translations = translations;
+
+    // Apply translations to current page
+    applyTranslations();
+    renderedLanguage = language;
+
+    return language;
+  } catch (error) {
+    console.error(`Failed to load translations for ${language}:`, error);
+    // If English (fallback) also fails, avoid infinite recursion.
+    // Keep whatever translations are already loaded: applyTranslations()
+    // skips keys without a translation, so the existing text stays visible
+    // instead of being replaced by raw i18n keys.
+    if (language === 'en') {
+      if (!window.translations) {
+        window.translations = {};
+      }
+      if (requestId !== null && requestId !== translationRequestId) {
+        return null;
+      }
+      // Report the language actually displayed: with a previously rendered
+      // locale still in the DOM, 'en' would mislabel the UI state.
+      return renderedLanguage ?? 'en';
+    }
+    // Fall back to English
+    return loadTranslations('en', requestId);
+  }
+}
+
+// Own-property-only lookup: enumerates the loaded translations instead of
+// using computed key access, so inherited names ("constructor", "__proto__")
+// can never resolve and no dynamic object-injection sink exists.
+function lookupTranslation(key) {
+  const entry = Object.entries(window.translations ?? {}).find(([name]) => name === key);
+  return entry ? entry[1] : undefined;
+}
+
+// Translate a key using the loaded locale. Falls back to the provided
+// default (typically the English string) when translations are missing or
+// not yet loaded, so dynamic strings degrade to content, never key names.
+export function translate(key, fallback) {
+  return lookupTranslation(key) || fallback || key;
+}
+
+// Original DOM content per element, captured before the first translation
+// pass, so a missing key restores the shipped HTML text instead of leaving
+// another locale's translation behind. WeakMap: no DOM pollution, entries
+// are collected with their elements.
+const originalContent = new WeakMap();
+
+// Record the shipped content of every data-i18n element up front. This must
+// happen before any async work: applyTranslations() skips elements marked
+// has-file, so an element whose state changed before the first translation
+// pass (e.g. a file chosen while the initial locale fetch is pending) would
+// otherwise never get an original recorded, and a later missing-key fallback
+// could keep another locale's text instead of the shipped one.
+function captureOriginalContent() {
+  $$('[data-i18n]').forEach(element => {
+    if (!originalContent.has(element)) {
+      originalContent.set(element, elementContent(element));
+    }
+  });
+}
+
+function elementContent(element) {
+  if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+    return element.placeholder;
+  }
+  if (element.tagName === 'META') {
+    return element.getAttribute('content');
+  }
+  return element.textContent;
+}
+
+function setElementContent(element, value) {
+  if (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA') {
+    element.placeholder = value;
+  } else if (element.tagName === 'META') {
+    element.setAttribute('content', value);
+  } else {
+    element.textContent = value;
+  }
+}
+
+// Apply translations to the page elements with data-i18n attributes
+export function applyTranslations() {
+  // Translate elements with data-i18n attribute
+  const elements = $$('[data-i18n]');
+  elements.forEach(element => {
+    // Skip elements currently showing dynamic content (e.g. a chosen file
+    // name) so a language switch does not clobber it with a static label.
+    if (element.classList.contains('has-file')) {
+      return;
+    }
+
+    const key = element.getAttribute('data-i18n');
+    if (!originalContent.has(element)) {
+      originalContent.set(element, elementContent(element));
+    }
+
+    // A missing key restores the original HTML text: the shipped content is
+    // the deterministic floor, so a partially translated locale degrades to
+    // English defaults instead of a mix of languages or raw key names.
+    setElementContent(element, lookupTranslation(key) ?? originalContent.get(element));
+  });
+}
+
+// Switch language and reload translations
+// async to properly await translation loading and prevent race conditions
+export async function switchLanguage(newLanguage) {
+  if (!isValidLanguage(newLanguage)) {
+    return;
+  }
+
+  // Increment request ID to invalidate any in-flight requests
+  const currentRequestId = ++translationRequestId;
+
+  // Update URL with language parameter: this records the user's intent, so
+  // a reload retries the requested language even if this attempt falls back.
+  // replaceState (not pushState): the language is a page preference, not a
+  // navigation — a history entry per switch would make the Back button
+  // change only the URL with no popstate handler to re-render.
+  const url = new URL(window.location);
+  url.searchParams.set('lang', newLanguage);
+  window.history.replaceState({}, '', url);
+
+  // Load translations with request ID to guard against race conditions, and
+  // track the load so dynamic error paths awaiting whenLanguageReady() render
+  // in the language being switched to, not the previous one
+  const loadPromise = loadTranslations(newLanguage, currentRequestId);
+  languagePromise = loadPromise;
+  const appliedLanguage = await loadPromise;
+
+  // Nothing superseded us: reflect the language actually rendered. If the
+  // fetch failed and English was used as fallback, the UI state must say
+  // English too — otherwise the selector and <html lang> claim a language
+  // that is not displayed.
+  if (appliedLanguage === null) {
+    return;
+  }
+
+  // Update HTML lang attribute for accessibility
+  document.documentElement.setAttribute('lang', appliedLanguage);
+
+  // Update language selector value
+  const languageSelect = document.getElementById('language-select');
+  if (languageSelect && languageSelect.value !== appliedLanguage) {
+    languageSelect.value = appliedLanguage;
+  }
+  // Localized accessible name: aria-label is not covered by data-i18n
+  if (languageSelect) {
+    languageSelect.setAttribute('aria-label', translate('select_language', 'Select language'));
+  }
+}
+
+// Setup language on initial load. Not itself async: the work runs in a
+// promise tracked for whenLanguageReady(), so the initial load is covered
+// exactly like a later switch.
+export function setupLanguage() {
+  const ready = (async () => {
+    // Capture shipped content before any async work (see
+    // captureOriginalContent): the first await below must not run first.
+    captureOriginalContent();
+
+    // Load the language list before detection/translation: it drives both
+    await loadLanguageManifest();
+
+  const currentLanguage = detectLanguage();
+
+  // Increment request ID and use it for the initial load to avoid races
+  const currentRequestId = ++translationRequestId;
+  const appliedLanguage = await loadTranslations(currentLanguage, currentRequestId);
+
+  // If a newer language request was made while we were loading, abort
+  if (currentRequestId !== translationRequestId || appliedLanguage === null) {
+    return;
+  }
+
+  // Set HTML lang attribute and selector value from the language actually
+  // rendered (may be the English fallback if the requested one failed)
+  document.documentElement.setAttribute('lang', appliedLanguage);
+
+  const languageSelect = document.getElementById('language-select');
+
+  if (languageSelect) {
+    // Build the selector from the manifest — the same source of truth the
+    // server uses — instead of hardcoded <option> markup.
+    languageSelect.replaceChildren(...supportedLanguages.map(code => {
+      const option = document.createElement('option');
+      option.value = code;
+      option.textContent = nativeLanguageName(code);
+      return option;
+    }));
+    // Ensure selector reflects current language
+    if (languageSelect.value !== appliedLanguage) {
+      languageSelect.value = appliedLanguage;
+    }
+    // Localized accessible name: aria-label is not covered by data-i18n
+    languageSelect.setAttribute('aria-label', translate('select_language', 'Select language'));
+    // Add event listener for language selector (CSP-compliant)
+    languageSelect.addEventListener('change', function() {
+      switchLanguage(this.value);
+    });
+  }
+  })();
+
+  languagePromise = ready;
+  return ready;
 }

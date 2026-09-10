@@ -38,6 +38,11 @@ RUN npm install -g \
 
 COPY web/ ./
 
+# Regenerate the language manifest from the locales directory so the shipped
+# manifest always matches the locale files in the image. The committed copy in
+# web/static/ is only a fallback for non-Docker (local) runs.
+RUN node -e "const fs=require('fs');const langs=fs.readdirSync('static/locales').filter(f=>f.endsWith('.json')).map(f=>f.slice(0,-5)).sort();fs.writeFileSync('static/locales-manifest.json',JSON.stringify({languages:langs},null,2)+'\n')"
+
 # Minify JS and CSS files. set -eu aborts the build if any node-minify
 # invocation fails — without it only the trailing mv was skipped and the
 # loop continued, silently shipping the unminified file. WORKDIR (not a
