@@ -140,3 +140,17 @@ func TestStoreReturnsWriteError(t *testing.T) {
 	assert.Error(t, err, "a swallowed write error would report success with an empty token")
 	assert.Empty(t, token)
 }
+
+// TestRedactTokenFromError pins the error sanitization applied before store errors
+// reach the handlers (which log them): Vault transport errors embed the
+// request URL, whose path contains the one-time token.
+func TestRedactTokenFromError(t *testing.T) {
+	err := errors.New(`Get "http://vault:8200/v1/cubbyhole/hvs.SECRET123": dial tcp: connection refused`)
+
+	redacted := redactTokenFromError(err, "hvs.SECRET123")
+
+	assert.Error(t, redacted)
+	assert.NotContains(t, redacted.Error(), "hvs.SECRET123")
+	assert.Contains(t, redacted.Error(), "REDACTED")
+	assert.Contains(t, redacted.Error(), "connection refused")
+}
