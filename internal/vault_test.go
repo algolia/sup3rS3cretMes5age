@@ -112,3 +112,31 @@ func TestIsTerminalTokenError(t *testing.T) {
 		})
 	}
 }
+
+// TestStoreReturnsWriteError pins that a failed write to Vault surfaces as
+// an error from Store: the previous implementation returned the (nil)
+// token-creation error on the write-failure branch, so the handler reported
+// success with an empty token while nothing was stored.
+func TestStoreReturnsWriteError(t *testing.T) {
+	ln, c := createTestVault(t)
+	defer func() { _ = ln.Close() }()
+
+	// A policy that can create tokens but has no access to the storage
+	// prefix: the one-time token created under it inherits these policies
+	// and cannot write the message, so the write fails.
+	policy := `path "auth/token/create" { capabilities = ["update"] }`
+	assert.NoError(t, c.Sys().PutPolicy("creator", policy))
+	secret, err := c.Auth().Token().Create(&api.TokenCreateRequest{
+		Policies: []string{"creator"},
+	})
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	v := vault{address: c.Address(), prefix: "secret/test/", token: secret.Auth.ClientToken}
+
+	token, err := v.Store("my secret", "")
+
+	assert.Error(t, err, "a swallowed write error would report success with an empty token")
+	assert.Empty(t, token)
+}
