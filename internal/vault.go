@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/vault/api"
@@ -76,9 +77,18 @@ func (v vault) Store(msg string, ttl string) (token string, err error) {
 	// while nothing was stored, and the client received a link that can
 	// never be read.
 	if werr := v.writeMsgToVault(t, msg); werr != nil {
-		return "", werr
+		return "", redactTokenFromError(werr, t)
 	}
 	return t, nil
+}
+
+// redactTokenFromError removes a one-time Vault token from a non-nil error message.
+// Vault transport errors embed the request URL, whose path contains the
+// token, and handlers log store errors verbatim — without redaction the
+// token would reach the logs, defeating the redaction applied to the
+// access log.
+func redactTokenFromError(err error, token string) error {
+	return errors.New(strings.ReplaceAll(err.Error(), token, "REDACTED"))
 }
 
 // createOneTimeToken creates a non-renewable Vault token with exactly 2 uses.
@@ -157,7 +167,7 @@ func (v vault) Get(token string) (msg string, err error) {
 
 	r, err := c.Logical().Read(v.prefix + token)
 	if err != nil {
-		return "", err
+		return "", redactTokenFromError(err, token)
 	}
 	return r.Data["msg"].(string), nil
 }
