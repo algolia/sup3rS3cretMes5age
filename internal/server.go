@@ -8,6 +8,8 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -194,6 +196,34 @@ func (s *Server) handler() http.Handler {
 	return s.echo
 }
 
+// redactTokens strips the values of token-bearing query parameters from a
+// request URI before it reaches the access logs. One-time Vault tokens must
+// never be logged: a token in the access log is a second copy of the secret,
+// readable by anyone with log access before the first retrieval consumes it.
+// Parameter names are preserved (token, filetoken, lang, filename, ttl, …)
+// so debugging keeps its context; only the values are masked.
+func redactTokens(rawURI string) string {
+	u, err := url.Parse(rawURI)
+	if err != nil {
+		// Unparseable URI: drop the query entirely rather than risk
+		// logging a token we failed to redact.
+		return rawURI
+	}
+	q := u.Query()
+	changed := false
+	for name := range q {
+		if strings.Contains(strings.ToLower(name), "token") {
+			q.Set(name, "REDACTED")
+			changed = true
+		}
+	}
+	if !changed {
+		return rawURI
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
 // setupMiddlewares configures Echo's middleware stack with security, rate limiting, and logging.
 // It applies HTTPS redirect (if enabled), CORS policy, rate limiting (5 RPS), request logging,
 // security headers (CSP, XSS protection, HSTS), body size limits (50MB), and panic recovery.
@@ -252,7 +282,7 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 				"remote_ip":     v.RemoteIP,
 				"host":          v.Host,
 				"method":        v.Method,
-				"uri":           v.URI,
+				"uri":           redactTokens(v.URI),
 				"user_agent":    v.UserAgent,
 				"status":        v.Status,
 				"error":         "",
