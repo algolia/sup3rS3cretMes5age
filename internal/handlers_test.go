@@ -21,6 +21,11 @@ type FakeSecretMsgStorer struct {
 	err           error
 	lastUsedToken string
 	lastMsg       string
+	// failOnCall/failErr make the Nth Store call fail, to simulate
+	// distinct failures for the file upload and the message itself.
+	storeCalls int
+	failOnCall int
+	failErr    error
 }
 
 func (f *FakeSecretMsgStorer) Get(token string) (msg string, err error) {
@@ -30,6 +35,10 @@ func (f *FakeSecretMsgStorer) Get(token string) (msg string, err error) {
 
 func (f *FakeSecretMsgStorer) Store(msg string, ttl string) (token string, err error) {
 	f.lastMsg = msg
+	f.storeCalls++
+	if f.failOnCall > 0 && f.storeCalls == f.failOnCall {
+		return "", f.failErr
+	}
 	return f.token, f.err
 }
 
@@ -359,4 +368,58 @@ func TestCreateMsgHandlerWithFile(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCreateMsgHandlerDoesNotLeakStoreErrors pins finding #3 from the
+// security review: when the Vault store fails on the file-upload path,
+// the raw backend error must not be reflected into the HTTP response —
+// the client sees a constant message, the raw error goes to the server log.
+func TestCreateMsgHandlerDoesNotLeakStoreErrors(t *testing.T) {
+	rawErr := errors.New("vault: 1 error occurred:\n\t* permission denied to cubbyhole/secret")
+
+	newFileRequest := func(t *testing.T) echo.Context {
+		t.Helper()
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		assert.NoError(t, writer.WriteField("msg", "secret message"))
+		part, err := writer.CreateFormFile("file", "upload.txt")
+		assert.NoError(t, err)
+		_, err = part.Write([]byte("file content"))
+		assert.NoError(t, err)
+		assert.NoError(t, writer.Close())
+
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodPost, "/secret", body)
+		req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		return c
+	}
+
+	t.Run("file store failure returns constant message", func(t *testing.T) {
+		c := newFileRequest(t)
+		s := &FakeSecretMsgStorer{token: "tok", failOnCall: 1, failErr: rawErr}
+		err := NewSecretHandlers(s).CreateMsgHandler(c)
+
+		if assert.IsType(t, &echo.HTTPError{}, err) {
+			httpErr := err.(*echo.HTTPError)
+			assert.Equal(t, http.StatusInternalServerError, httpErr.Code)
+			assert.Equal(t, "failed to store secret", httpErr.Message)
+			assert.NotContains(t, httpErr.Message, "vault:")
+			assert.NotContains(t, httpErr.Message, "cubbyhole")
+		}
+	})
+
+	t.Run("message store failure returns constant message", func(t *testing.T) {
+		c := newFileRequest(t)
+		s := &FakeSecretMsgStorer{token: "tok", failOnCall: 2, failErr: rawErr}
+		err := NewSecretHandlers(s).CreateMsgHandler(c)
+
+		if assert.IsType(t, &echo.HTTPError{}, err) {
+			httpErr := err.(*echo.HTTPError)
+			assert.Equal(t, http.StatusInternalServerError, httpErr.Code)
+			assert.Equal(t, "failed to store secret", httpErr.Message)
+			assert.NotContains(t, httpErr.Message, "vault:")
+		}
+	})
 }
