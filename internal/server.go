@@ -334,8 +334,12 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 			},
 		),
 		IdentifierExtractor: func(ctx echo.Context) (string, error) {
+			// Header.Get returns only the first field; a trusted proxy that
+			// APPENDS its entry as a second X-Forwarded-For field would be
+			// invisible to the walk, leaving the attacker-controlled first
+			// field in charge. Combine every field into one chain.
 			return trustedClientIP(ctx.Request().RemoteAddr,
-				ctx.Request().Header.Get(echo.HeaderXForwardedFor), cnf.TrustedProxies)
+				strings.Join(ctx.Request().Header.Values(echo.HeaderXForwardedFor), ","), cnf.TrustedProxies)
 		},
 		DenyHandler: func(ctx echo.Context, identifier string, err error) error {
 			return ctx.JSON(http.StatusTooManyRequests, map[string]string{
