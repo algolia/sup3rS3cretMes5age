@@ -158,6 +158,9 @@ func TestRedactTokens(t *testing.T) {
 		// A control character makes url.Parse fail outright; the query must
 		// be dropped rather than logged unredacted (it carries a token here).
 		{"unparseable URI drops the query, path kept", "/msg?token=hvs.AAA\x00", "/msg"},
+		// u.Query() silently discards a pair whose value has an invalid %
+		// escape; the raw query must still not reach the log with a token.
+		{"malformed query value drops the query", "/msg?token=hvs.secret%ZZ", "/msg"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
