@@ -205,7 +205,14 @@ func (v vault) renewToken(ctx context.Context, c *api.Client) {
 			}
 		}
 
-		watcher.Start()
+		// Start() blocks for the life of the watcher (its body is
+		// `doneCh <- doRenew()`; it does not take a context), so it must
+		// run in its own goroutine — calling it synchronously would prevent
+		// the select below from ever observing DoneCh, RenewCh or ctx
+		// cancellation. Shutdown relies on watcher.Stop(): Stop closes the
+		// watcher's internal stopCh, the loop exits, and Start returns
+		// (doneCh is buffered, so the final send cannot block).
+		go watcher.Start()
 
 		select {
 		case <-ctx.Done():
