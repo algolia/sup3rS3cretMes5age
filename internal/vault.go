@@ -53,8 +53,56 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 		return nil, fmt.Errorf("vault connection or token validation failed (check VAULT_ADDR and VAULT_TOKEN): %w", err)
 	}
 
+	if err := v.verifyCapabilities(ctx, c); err != nil {
+		return nil, err
+	}
+
 	go v.renewToken(ctx, c, lookup)
 	return v, nil
+}
+
+// verifyCapabilities checks that the configured token's ACLs cover the
+// operations the service performs: creating one-time tokens (auth/token/create)
+// and writing and reading the storage prefix. LookupSelf only proves
+// authentication; a token missing these capabilities would pass boot and
+// then fail on every secret operation, so the gap fails loudly here. If the
+// token cannot query its own capabilities at all, the check is skipped with
+// a warning rather than blocking a possibly-valid deployment.
+func (v vault) verifyCapabilities(ctx context.Context, c *api.Client) error {
+	caps, err := c.Sys().CapabilitiesSelfWithContext(ctx, "auth/token/create")
+	if err != nil {
+		log.Printf("warning: unable to verify Vault capabilities (sys/capabilities-self denied?): %v", err)
+		return nil
+	}
+	if !hasAnyCapability(caps, "root", "update", "create") {
+		return fmt.Errorf("vault token lacks the required capability on auth/token/create (need update; have %v)", caps)
+	}
+
+	caps, err = c.Sys().CapabilitiesSelfWithContext(ctx, v.prefix)
+	if err != nil {
+		log.Printf("warning: unable to verify Vault capabilities (sys/capabilities-self denied?): %v", err)
+		return nil
+	}
+	if !hasAnyCapability(caps, "root", "create", "update") {
+		return fmt.Errorf("vault token lacks the required write capability on %s (need create or update; have %v)", v.prefix, caps)
+	}
+	if !hasAnyCapability(caps, "root", "read") {
+		return fmt.Errorf("vault token lacks the required read capability on %s (have %v)", v.prefix, caps)
+	}
+	return nil
+}
+
+// hasAnyCapability reports whether the capability list contains any of the
+// given capabilities (Vault reports "root" for root tokens).
+func hasAnyCapability(caps []string, wanted ...string) bool {
+	for _, cap := range caps {
+		for _, w := range wanted {
+			if cap == w {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Store saves a message to Vault with the specified time-to-live (TTL).

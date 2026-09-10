@@ -154,3 +154,55 @@ func TestRedactTokenFromError(t *testing.T) {
 	assert.Contains(t, redacted.Error(), "REDACTED")
 	assert.Contains(t, redacted.Error(), "connection refused")
 }
+
+// TestNewVaultFailsWhenCapabilitiesMissing pins the boot capability check:
+// LookupSelf only proves authentication; a token that can create one-time
+// tokens but cannot write the storage prefix must fail at boot (fail-loud)
+// instead of starting a service that 500s on every secret operation.
+func TestNewVaultFailsWhenCapabilitiesMissing(t *testing.T) {
+	ln, c := createTestVault(t)
+	defer func() { _ = ln.Close() }()
+
+	policy := `path "auth/token/create" { capabilities = ["update"] }`
+	assert.NoError(t, c.Sys().PutPolicy("creator", policy))
+	secret, err := c.Auth().Token().Create(&api.TokenCreateRequest{
+		Policies: []string{"creator"},
+	})
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	_, err = NewVault(context.Background(), c.Address(), "secret/test/", secret.Auth.ClientToken)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "capability")
+}
+
+// TestNewVaultAcceptsTokenWithSufficientCapabilities is the positive case:
+// a token whose ACLs cover token creation and the storage prefix boots.
+func TestNewVaultAcceptsTokenWithSufficientCapabilities(t *testing.T) {
+	ln, c := createTestVault(t)
+	defer func() { _ = ln.Close() }()
+
+	policy := `
+path "auth/token/create" { capabilities = ["update"] }
+path "secret/test/*" { capabilities = ["create", "read", "update"] }`
+	assert.NoError(t, c.Sys().PutPolicy("worker", policy))
+	secret, err := c.Auth().Token().Create(&api.TokenCreateRequest{
+		Policies: []string{"worker"},
+	})
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	v, err := NewVault(context.Background(), c.Address(), "secret/test/", secret.Auth.ClientToken)
+	assert.NoError(t, err)
+
+	token, err := v.Store("round trip", "")
+	if assert.NoError(t, err) {
+		msg, err := v.Get(token)
+		if assert.NoError(t, err) {
+			assert.Equal(t, "round trip", msg)
+		}
+	}
+}
