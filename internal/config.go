@@ -4,6 +4,7 @@ package internal
 
 import (
 	"log"
+	"net"
 	"os"
 	"strings"
 )
@@ -27,6 +28,10 @@ type conf struct {
 	VaultPrefix string
 	// AllowedOrigins is the list of allowed CORS origins.
 	AllowedOrigins []string
+	// TrustedProxies is the list of proxy networks (IP or CIDR) whose
+	// X-Forwarded-For headers may be used to identify clients for rate
+	// limiting. Empty (the default) means headers are never trusted.
+	TrustedProxies []*net.IPNet
 }
 
 // Environment variable names for application configuration.
@@ -47,6 +52,8 @@ const (
 	VaultPrefixenv = "SUPERSECRETMESSAGE_VAULT_PREFIX"
 	// AllowedOriginsVarenv is the environment variable for allowed CORS origins.
 	AllowedOriginsVarenv = "SUPERSECRETMESSAGE_ALLOWED_ORIGINS"
+	// TrustedProxiesVarenv is the environment variable for the trusted proxy networks.
+	TrustedProxiesVarenv = "SUPERSECRETMESSAGE_TRUSTED_PROXIES"
 )
 
 // LoadConfig loads and validates application configuration from environment variables.
@@ -94,6 +101,8 @@ func LoadConfig() conf {
 		cnf.VaultPrefix = "cubbyhole/"
 	}
 
+	cnf.TrustedProxies = parseTrustedProxies(os.Getenv(TrustedProxiesVarenv))
+
 	log.Println("[INFO] HTTP Binding Address:", cnf.HttpBindingAddress)
 	log.Println("[INFO] HTTPS Binding Address:", cnf.HttpsBindingAddress)
 	log.Println("[INFO] HTTPS Redirect enabled:", cnf.HttpsRedirectEnabled)
@@ -102,6 +111,44 @@ func LoadConfig() conf {
 	log.Println("[INFO] TLS Cert Key Filepath:", cnf.TLSCertKeyFilepath)
 	log.Println("[INFO] Vault prefix:", cnf.VaultPrefix)
 	log.Println("[INFO] Allowed Origins:", cnf.AllowedOrigins)
+	if len(cnf.TrustedProxies) == 0 {
+		log.Println("[INFO] Trusted Proxies: none (client headers are ignored for rate limiting)")
+	} else {
+		log.Println("[INFO] Trusted Proxies:", os.Getenv(TrustedProxiesVarenv))
+	}
 
 	return cnf
+}
+
+// parseTrustedProxies parses a comma-separated list of IP addresses or CIDR
+// networks into IPNet values. An empty string yields nil (no trusted proxies:
+// X-Forwarded-For is never honored). A bare IP is treated as a single-host
+// network. Invalid entries are fatal — a silently dropped entry could turn a
+// trusted proxy into an untrusted one and break the client identification.
+func parseTrustedProxies(raw string) []*net.IPNet {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+
+	var networks []*net.IPNet
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if !strings.Contains(entry, "/") {
+			// Bare IP: single-host network (IPv4 /32 or IPv6 /128).
+			if strings.Contains(entry, ":") {
+				entry += "/128"
+			} else {
+				entry += "/32"
+			}
+		}
+		_, network, err := net.ParseCIDR(entry)
+		if err != nil {
+			log.Fatalf("Invalid entry %q in %s: %v", entry, TrustedProxiesVarenv, err)
+		}
+		networks = append(networks, network)
+	}
+	return networks
 }
