@@ -71,8 +71,12 @@ func (v vault) Store(msg string, ttl string) (token string, err error) {
 		return "", err
 	}
 
-	if v.writeMsgToVault(t, msg) != nil {
-		return "", err
+	// The write failure must be returned, not the (nil) token-creation
+	// error: swallowing it made Store report success with an empty token
+	// while nothing was stored, and the client received a link that can
+	// never be read.
+	if werr := v.writeMsgToVault(t, msg); werr != nil {
+		return "", werr
 	}
 	return t, nil
 }
