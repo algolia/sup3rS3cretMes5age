@@ -209,6 +209,9 @@ func redactTokens(rawURI string) string {
 	if err != nil {
 		// Unparseable URI: drop the query entirely rather than risk
 		// logging a token we failed to redact.
+		if idx := strings.Index(rawURI, "?"); idx >= 0 {
+			return rawURI[:idx]
+		}
 		return rawURI
 	}
 	q := u.Query()
