@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"net"
 	"testing"
 
@@ -86,4 +87,28 @@ func TestStoreWithInvalidAddress(t *testing.T) {
 	_, err := v.Store("msg", "1h")
 
 	assert.Error(t, err)
+}
+
+// TestIsTerminalTokenError pins the classification used after a lifetime
+// watcher's lease ends: auth rejections (403/404) mean the token can never
+// renew again and must exit the process, while transport-level errors must
+// keep the renewal loop retrying.
+func TestIsTerminalTokenError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		terminal bool
+	}{
+		{"403 auth rejection", &api.ResponseError{StatusCode: 403}, true},
+		{"404 unknown token", &api.ResponseError{StatusCode: 404}, true},
+		{"503 vault restarting", &api.ResponseError{StatusCode: 503}, false},
+		{"500 internal", &api.ResponseError{StatusCode: 500}, false},
+		{"transport error", errors.New("connection refused"), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.terminal, isTerminalTokenError(tt.err))
+		})
+	}
 }

@@ -2,8 +2,10 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/hashicorp/vault/api"
@@ -171,20 +173,20 @@ func (v vault) newVaultClientWithToken(token string) (*api.Client, error) {
 // Vault authentication token before it expires. This ensures continuous
 // operation of the service without manual token refresh.
 //
-// renewToken runs in a background goroutine to automatically renew the main
-// Vault authentication token before it expires. This ensures continuous
-// operation of the service without manual token refresh.
-//
 // The lookup result obtained during NewVault's boot validation is passed in:
 // re-querying it here would open a window where a transient Vault/network
-// hiccup permanently disables renewal for an otherwise renewable token. The
-// lifetime watcher is recreated whenever the current lease ends (DoneCh
-// fires) — the previous implementation never exited its monitoring loop, so
-// after the first lease end it spun on a closed channel and never renewed
-// again. A retry backoff keeps the loop from spinning hot when Vault is
-// unreachable or the token cannot be renewed. The goroutine exits when ctx is
-// cancelled (server shutdown) or the token is not renewable (e.g. the Vault
-// dev root token), which needs no renewal.
+// hiccup permanently disables renewal for an otherwise renewable token. One
+// lifetime watcher is monitored until its lease ends (DoneCh fires) — the
+// watcher itself keeps renewing and reports each success on RenewCh, so the
+// select must stay on the same watcher across renewals: recreating it after
+// every RenewCh event would stack a new concurrent renewal loop on top of
+// the still-running previous one. After DoneCh the token is re-validated: a
+// transient failure just retries, but an auth rejection means the token can
+// never renew again, so the process exits (fail-loud, matching NewVault) and
+// the supervisor's restart policy brings it back with a fresh token. The
+// goroutine exits cleanly on ctx cancellation (server shutdown) or when the
+// token is not renewable (e.g. the Vault dev root token), which needs no
+// renewal.
 func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret) {
 	if renewable, ok := lookup.Data["renewable"].(bool); !ok || !renewable {
 		log.Println("vault token is not renewable; token renewal disabled")
@@ -215,27 +217,57 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 		// (doneCh is buffered, so the final send cannot block).
 		go watcher.Start()
 
-		select {
-		case <-ctx.Done():
-			watcher.Stop()
-			return
-
-		// The lease ended (expired or revoked): recreate the watcher after a
-		// backoff — Vault may be restarting, or the token may have been
-		// re-issued out of band.
-		case err := <-watcher.DoneCh():
-			watcher.Stop()
-			log.Printf("vault auth token lease ended (%v); retrying renewal in %s", err, retryDelay)
+		watcherDone := false
+		for !watcherDone {
 			select {
 			case <-ctx.Done():
+				watcher.Stop()
 				return
-			case <-time.After(retryDelay):
-			}
 
-		// RenewCh is a channel that receives a message when a successful
-		// renewal takes place and includes metadata about the renewal.
-		case info := <-watcher.RenewCh():
-			log.Printf("auth token: successfully renewed; remaining duration: %ds", info.Secret.Auth.LeaseDuration)
+			// The lease ended (expired, revoked, or renewal terminally
+			// failed): stop the watcher, back off, then re-validate the
+			// token before building a new one.
+			case err := <-watcher.DoneCh():
+				watcher.Stop()
+				watcherDone = true
+				log.Printf("vault auth token lease ended (%v); revalidating in %s", err, retryDelay)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(retryDelay):
+				}
+				if _, lerr := c.Auth().Token().LookupSelfWithContext(ctx); lerr != nil {
+					// Auth rejection: this token can never renew again, so
+					// retrying would just spin while every request fails.
+					// Exit loudly so the supervisor restarts the process.
+					if isTerminalTokenError(lerr) {
+						log.Fatalf("vault auth token is no longer valid: %v; exiting so the supervisor can restart with a fresh token", lerr)
+					}
+					// Transient (network, 5xx…): fall through and recreate
+					// the watcher, whose renewal loop retries with its own
+					// backoff.
+				}
+
+			// RenewCh is a channel that receives a message when a successful
+			// renewal takes place and includes metadata about the renewal.
+			// Stay on the same watcher: it keeps running and renewing.
+			case info := <-watcher.RenewCh():
+				log.Printf("auth token: successfully renewed; remaining duration: %ds", info.Secret.Auth.LeaseDuration)
+			}
 		}
 	}
+}
+
+// isTerminalTokenError reports whether a LookupSelf error means the token
+// itself is dead (revoked/expired/unknown) rather than Vault being
+// unreachable — only the former makes renewal retrying pointless.
+func isTerminalTokenError(err error) bool {
+	var respErr *api.ResponseError
+	if errors.As(err, &respErr) {
+		switch respErr.StatusCode {
+		case http.StatusForbidden, http.StatusNotFound:
+			return true
+		}
+	}
+	return false
 }
