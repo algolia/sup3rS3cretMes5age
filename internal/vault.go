@@ -1,8 +1,10 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/hashicorp/vault/api"
 )
@@ -27,14 +29,28 @@ type vault struct {
 	token string
 }
 
-// NewVault creates a new vault client and starts a background goroutine for token renewal.
+// NewVault creates a new vault client, validates connectivity and the token
+// with a LookupSelf call, and starts a background goroutine for token renewal.
 // If address or token are empty, they will be read from VAULT_ADDR and VAULT_TOKEN
 // environment variables respectively. The prefix determines the Vault storage path.
-func NewVault(address string, prefix string, token string) *vault {
-	v := &vault{address, prefix, token}
+// A failed boot validation returns an error instead of a degraded store: the
+// service cannot store or retrieve secrets without a working Vault connection,
+// so failing loudly is preferable to serving 500s until the first request
+// hits the broken client.
+func NewVault(ctx context.Context, address string, prefix string, token string) (*vault, error) {
+	v := &vault{address: address, prefix: prefix, token: token}
 
-	go v.newVaultClientToRenewToken()
-	return v
+	c, err := v.newVaultClient()
+	if err != nil {
+		return nil, fmt.Errorf("vault client initialization failed: %w", err)
+	}
+
+	if _, err := c.Auth().Token().LookupSelfWithContext(ctx); err != nil {
+		return nil, fmt.Errorf("vault connection or token validation failed (check VAULT_ADDR and VAULT_TOKEN): %w", err)
+	}
+
+	go v.renewToken(ctx, c)
+	return v, nil
 }
 
 // Store saves a message to Vault with the specified time-to-live (TTL).
@@ -150,44 +166,67 @@ func (v vault) newVaultClientWithToken(token string) (*api.Client, error) {
 	return c, nil
 }
 
-// newVaultClientToRenewToken runs in a background goroutine to automatically renew
-// the main Vault authentication token before it expires. This ensures continuous
+// renewToken runs in a background goroutine to automatically renew the main
+// Vault authentication token before it expires. This ensures continuous
 // operation of the service without manual token refresh.
-func (v vault) newVaultClientToRenewToken() {
-	c, err := v.newVaultClient()
+//
+// The lifetime watcher is recreated whenever the current lease ends (DoneCh
+// fires) — the previous implementation never exited its monitoring loop, so
+// after the first lease end it spun on a closed channel and never renewed
+// again. A retry backoff keeps the loop from spinning hot when Vault is
+// unreachable or the token cannot be renewed. The goroutine exits when ctx is
+// cancelled (server shutdown) or the token is not renewable (e.g. the Vault
+// dev root token), which needs no renewal.
+func (v vault) renewToken(ctx context.Context, c *api.Client) {
+	lookup, err := c.Auth().Token().LookupSelfWithContext(ctx)
 	if err != nil {
-		log.Println(err)
+		// NewVault already confirmed connectivity at boot; reaching here
+		// means Vault became unreachable. Renewal cannot proceed.
+		log.Printf("vault token renewal disabled: token lookup failed: %v", err)
+		return
 	}
-	client_auth_token := &api.Secret{Auth: &api.SecretAuth{ClientToken: c.Token(), Renewable: true}}
-
-	/* */
-	log.Println("renew cycle: begin")
-	defer log.Println("renew cycle: end")
-
-	// auth token
-	authTokenWatcher, err := c.NewLifetimeWatcher(&api.LifetimeWatcherInput{
-		Secret: client_auth_token,
-	})
-
-	if err != nil {
-		err := fmt.Errorf("unable to initialize auth token lifetime watcher: %w", err)
-		fmt.Println(err.Error())
+	if renewable, ok := lookup.Data["renewable"].(bool); !ok || !renewable {
+		log.Println("vault token is not renewable; token renewal disabled")
+		return
 	}
 
-	go authTokenWatcher.Start()
-	defer authTokenWatcher.Stop()
-
-	// monitor events from both watchers
+	const retryDelay = 30 * time.Second
 	for {
-		select {
+		watcher, err := c.NewLifetimeWatcher(&api.LifetimeWatcherInput{
+			Secret: &api.Secret{Auth: &api.SecretAuth{ClientToken: c.Token(), Renewable: true}},
+		})
+		if err != nil {
+			log.Printf("unable to initialize auth token lifetime watcher: %v", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(retryDelay):
+				continue
+			}
+		}
 
-		case err := <-authTokenWatcher.DoneCh():
-			// Leases created by a token get revoked when the token is revoked.
-			fmt.Println("Error is :", err)
+		watcher.Start()
+
+		select {
+		case <-ctx.Done():
+			watcher.Stop()
+			return
+
+		// The lease ended (expired or revoked): recreate the watcher after a
+		// backoff — Vault may be restarting, or the token may have been
+		// re-issued out of band.
+		case err := <-watcher.DoneCh():
+			watcher.Stop()
+			log.Printf("vault auth token lease ended (%v); retrying renewal in %s", err, retryDelay)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(retryDelay):
+			}
 
 		// RenewCh is a channel that receives a message when a successful
 		// renewal takes place and includes metadata about the renewal.
-		case info := <-authTokenWatcher.RenewCh():
+		case info := <-watcher.RenewCh():
 			log.Printf("auth token: successfully renewed; remaining duration: %ds", info.Secret.Auth.LeaseDuration)
 		}
 	}
