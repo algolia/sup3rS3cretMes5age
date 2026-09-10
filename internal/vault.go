@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -285,8 +286,17 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 
 	const retryDelay = 30 * time.Second
 	for {
+		// Seed the watcher with the token's current lease duration:
+		// LifetimeWatcher schedules its first renewal from
+		// SecretAuth.LeaseDuration, and leaving it zero would make the
+		// watcher fall back to its own default timing instead of the
+		// token's actual TTL.
 		watcher, err := c.NewLifetimeWatcher(&api.LifetimeWatcherInput{
-			Secret: &api.Secret{Auth: &api.SecretAuth{ClientToken: c.Token(), Renewable: true}},
+			Secret: &api.Secret{Auth: &api.SecretAuth{
+				ClientToken:   c.Token(),
+				Renewable:     true,
+				LeaseDuration: leaseDuration(lookup),
+			}},
 		})
 		if err != nil {
 			log.Printf("unable to initialize auth token lifetime watcher: %v", err)
@@ -346,6 +356,24 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 			}
 		}
 	}
+}
+
+// leaseDuration extracts the token's lease duration in seconds from a
+// LookupSelf result, tolerating both float64 and json.Number representations.
+func leaseDuration(lookup *api.Secret) int {
+	if lookup == nil {
+		return 0
+	}
+	switch ttl := lookup.Data["ttl"].(type) {
+	case float64:
+		return int(ttl)
+	case json.Number:
+		n, err := ttl.Int64()
+		if err == nil {
+			return int(n)
+		}
+	}
+	return 0
 }
 
 // isTerminalTokenError reports whether a LookupSelf error means the token
