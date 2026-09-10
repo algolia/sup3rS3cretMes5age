@@ -7,6 +7,8 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -224,6 +226,65 @@ func redactTokens(rawURI string) string {
 	return u.String()
 }
 
+// trustedClientIP identifies the client to rate-limit on, without trusting
+// X-Forwarded-For unless it is safe to do so.
+//
+// Echo's ctx.RealIP() honors X-Forwarded-For unconditionally, so behind no
+// proxy (or an untrusted one) an attacker can send a fresh header on every
+// request and get a fresh rate-limit bucket, defeating the per-IP limit.
+// Instead:
+//   - no trusted proxies configured → always the connection peer;
+//   - peer is NOT a trusted proxy → the connection peer (headers ignored —
+//     only a trusted intermediary can speak for the client);
+//   - peer IS a trusted proxy → walk X-Forwarded-For right to left, skipping
+//     trusted hops, and use the first untrusted address as the client
+//     (the standard interpretation, robust to proxies that append).
+//
+// An unparseable RemoteAddr fails closed (error → 429) rather than opening
+// an unauthenticated bucket.
+func trustedClientIP(remoteAddr string, forwardedFor string, trusted []*net.IPNet) (string, error) {
+	peerHost, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		// RemoteAddr without a port (rare in tests): use it as-is.
+		peerHost = remoteAddr
+	}
+	peer := net.ParseIP(peerHost)
+	if peer == nil {
+		return "", fmt.Errorf("unable to determine client address from %q", remoteAddr)
+	}
+
+	if len(trusted) == 0 || !containsIP(trusted, peer) {
+		return peer.String(), nil
+	}
+
+	client := peer.String()
+	// Walk X-Forwarded-For right to left: entries on the right were added by
+	// the closest proxies and are the only ones a trusted proxy chain vouches for.
+	parts := strings.Split(forwardedFor, ",")
+	for i := len(parts) - 1; i >= 0; i-- {
+		candidate := net.ParseIP(strings.TrimSpace(parts[i]))
+		if candidate == nil {
+			// Malformed entry: the chain is not trustworthy past this point.
+			break
+		}
+		if !containsIP(trusted, candidate) {
+			return candidate.String(), nil
+		}
+		client = candidate.String()
+	}
+	return client, nil
+}
+
+// containsIP reports whether ip falls within any of the networks.
+func containsIP(networks []*net.IPNet, ip net.IP) bool {
+	for _, network := range networks {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 // setupMiddlewares configures Echo's middleware stack with security, rate limiting, and logging.
 // It applies HTTPS redirect (if enabled), CORS policy, rate limiting (5 RPS), request logging,
 // security headers (CSP, XSS protection, HSTS), body size limits (50MB), and panic recovery.
@@ -250,7 +311,8 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 			},
 		),
 		IdentifierExtractor: func(ctx echo.Context) (string, error) {
-			return ctx.RealIP(), nil
+			return trustedClientIP(ctx.Request().RemoteAddr,
+				ctx.Request().Header.Get(echo.HeaderXForwardedFor), cnf.TrustedProxies)
 		},
 		DenyHandler: func(ctx echo.Context, identifier string, err error) error {
 			return ctx.JSON(http.StatusTooManyRequests, map[string]string{
