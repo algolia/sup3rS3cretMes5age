@@ -254,7 +254,10 @@ func redactTokens(rawURI string) string {
 //     only a trusted intermediary can speak for the client);
 //   - peer IS a trusted proxy → walk X-Forwarded-For right to left, skipping
 //     trusted hops, and use the first untrusted address as the client
-//     (the standard interpretation, robust to proxies that append).
+//     (the standard interpretation, robust to proxies that append). If a
+//     malformed entry is hit, or every entry claims to be a trusted proxy,
+//     the chain cannot be vouched for and the connection peer is used —
+//     never an address the request itself selected.
 //
 // An unparseable RemoteAddr fails closed (error → 429) rather than opening
 // an unauthenticated bucket.
@@ -273,22 +276,26 @@ func trustedClientIP(remoteAddr string, forwardedFor string, trusted []*net.IPNe
 		return peer.String(), nil
 	}
 
-	client := peer.String()
 	// Walk X-Forwarded-For right to left: entries on the right were added by
 	// the closest proxies and are the only ones a trusted proxy chain vouches for.
 	parts := strings.Split(forwardedFor, ",")
 	for i := len(parts) - 1; i >= 0; i-- {
 		candidate := net.ParseIP(strings.TrimSpace(parts[i]))
 		if candidate == nil {
-			// Malformed entry: the chain is not trustworthy past this point.
-			break
+			// Malformed entry: the chain is not trustworthy past this point,
+			// and returning any already-seen entry would let an attacker
+			// behind the proxy rotate buckets with crafted garbage. Fall
+			// back to the connection peer.
+			return peer.String(), nil
 		}
 		if !containsIP(trusted, candidate) {
 			return candidate.String(), nil
 		}
-		client = candidate.String()
 	}
-	return client, nil
+	// Every entry claims to be a trusted proxy: the real client sits to the
+	// left of anything we can vouch for, so the leftmost entry is
+	// attacker-chosen too. Fall back to the connection peer.
+	return peer.String(), nil
 }
 
 // containsIP reports whether ip falls within any of the networks.

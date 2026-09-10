@@ -355,11 +355,18 @@ func TestTrustedClientIP(t *testing.T) {
 			expected:   "10.0.0.1",
 		},
 		{
-			name:       "all entries trusted: leftmost used",
+			name:       "all entries trusted: connection peer used, not an attacker-chosen entry",
 			remoteAddr: "10.0.0.1:1234",
 			xff:        "10.0.0.2, 10.0.0.3",
 			trusted:    proxy,
-			expected:   "10.0.0.2",
+			expected:   "10.0.0.1",
+		},
+		{
+			name:       "malformed entry after trusted hop: connection peer used, not the parsed trusted hop",
+			remoteAddr: "10.0.0.1:1234",
+			xff:        "garbage, 10.0.0.2",
+			trusted:    proxy,
+			expected:   "10.0.0.1",
 		},
 		{
 			name:       "IPv6 trusted proxy",
@@ -390,36 +397,39 @@ func TestTrustedClientIP(t *testing.T) {
 	}
 }
 
-// TestRateLimitIdentifierIgnoresSpoofedHeaders pins finding #5: the rate
-// limiter must not give each spoofed X-Forwarded-For a fresh bucket when no
-// trusted proxy is configured.
-func TestRateLimitIdentifierIgnoresSpoofedHeaders(t *testing.T) {
+// TestRateLimitSpoofedHeadersShareOneBucket pins finding #5 end to end
+// through the middleware stack: with no trusted proxy configured, rotating
+// X-Forwarded-For from one connection must NOT earn a fresh bucket per
+// request — the shared bucket must exhaust and start answering 429. This
+// drives the middleware's actual IdentifierExtractor: it would fail if
+// setupMiddlewares ever reverted to ctx.RealIP().
+func TestRateLimitSpoofedHeadersShareOneBucket(t *testing.T) {
 	cnf := conf{
 		HttpBindingAddress: ":8080",
 		VaultPrefix:        "cubbyhole/",
 	}
 	e := echo.New()
 	setupMiddlewares(e, cnf)
-
-	var identifiers []string
 	e.GET("/probe", func(c echo.Context) error {
-		// Reach into the same extraction logic the middleware uses.
-		id, err := trustedClientIP(c.Request().RemoteAddr,
-			c.Request().Header.Get(echo.HeaderXForwardedFor), cnf.TrustedProxies)
-		assert.NoError(t, err)
-		identifiers = append(identifiers, id)
 		return c.String(http.StatusOK, "ok")
 	})
 
-	for i := 0; i < 3; i++ {
+	// Rate 5/s, burst 10: 15 rapid requests from one RemoteAddr with a
+	// different spoofed header each must hit the single shared bucket.
+	saw429 := false
+	for i := 0; i < 15; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/probe", nil)
 		req.RemoteAddr = "203.0.113.7:55555"
 		req.Header.Set(echo.HeaderXForwardedFor, fmt.Sprintf("1.2.3.%d", i))
 		rec := httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
-		assert.Equal(t, http.StatusOK, rec.Code)
+		if rec.Code == http.StatusTooManyRequests {
+			saw429 = true
+			break
+		}
+		assert.Equal(t, http.StatusOK, rec.Code, "unexpected status on request %d", i+1)
 	}
 
-	assert.Equal(t, []string{"203.0.113.7", "203.0.113.7", "203.0.113.7"}, identifiers,
-		"spoofed X-Forwarded-For must not change the rate-limit identifier")
+	assert.True(t, saw429,
+		"15 requests from one RemoteAddr with rotating X-Forwarded-For must exhaust one shared bucket (no 429 seen: each spoof got a fresh bucket)")
 }
