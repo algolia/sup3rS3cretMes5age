@@ -27,12 +27,19 @@ func main() {
 	// Load configuration
 	conf := internal.LoadConfig()
 
-	// Create server with handlers
-	handlers := internal.NewSecretHandlers(internal.NewVault("", conf.VaultPrefix, ""))
-	server := internal.NewServer(conf, handlers)
-
-	// Setup graceful shutdown
+	// Setup context first: it drives both the graceful shutdown and the
+	// Vault token renewal goroutine started by NewVault.
 	ctx, cancel := context.WithCancel(context.Background())
+
+	// Create server with handlers; fail loudly if Vault is unreachable or
+	// the token is invalid rather than serving errors to every request.
+	store, err := internal.NewVault(ctx, "", conf.VaultPrefix, "")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Vault initialization failed: %v\n", err)
+		os.Exit(1)
+	}
+	handlers := internal.NewSecretHandlers(store)
+	server := internal.NewServer(conf, handlers)
 
 	// Listen for interrupt signals
 	sigChan := make(chan os.Signal, 1)
