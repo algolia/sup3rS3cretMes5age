@@ -260,3 +260,33 @@ func TestRenewTokenStopsOnContextCancel(t *testing.T) {
 }
 
 func boolPtr(b bool) *bool { return &b }
+
+// TestNewVaultFailsWhenRenewSelfDenied pins the functional renewal check:
+// a renewable token that cannot renew itself (renew-self denied, e.g. no
+// default policy) must fail at boot — the lifetime watcher would otherwise
+// silently convert the denial into a non-renewable countdown and the
+// service would die at lease end instead of failing loudly.
+func TestNewVaultFailsWhenRenewSelfDenied(t *testing.T) {
+	ln, c := createTestVault(t)
+	defer func() { _ = ln.Close() }()
+
+	policy := `
+path "auth/token/lookup-self" { capabilities = ["read"] }
+path "auth/token/create" { capabilities = ["update"] }
+path "secret/test/*" { capabilities = ["create", "read", "update"] }`
+	assert.NoError(t, c.Sys().PutPolicy("worker-norenew", policy))
+	secret, err := c.Auth().Token().Create(&api.TokenCreateRequest{
+		Policies:        []string{"worker-norenew"},
+		TTL:             "60s",
+		Renewable:       boolPtr(true),
+		NoDefaultPolicy: true,
+	})
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	_, err = NewVault(context.Background(), c.Address(), "secret/test/", secret.Auth.ClientToken)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot renew itself")
+}
