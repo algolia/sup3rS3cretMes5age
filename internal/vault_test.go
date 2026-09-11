@@ -318,3 +318,34 @@ func TestNewVaultRejectsFiniteNonRenewableToken(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not renewable and expires")
 }
+
+// TestTokenFromCreateResponse pins the malformed-response guard on the
+// token-create path: ParseSecret can return (nil, nil) for an empty body,
+// and dereferencing s.Auth.ClientToken would panic instead of returning the
+// intended boot-validation error.
+func TestTokenFromCreateResponse(t *testing.T) {
+	tests := []struct {
+		name    string
+		secret  *api.Secret
+		wantTok string
+		wantErr bool
+	}{
+		{"nil response", nil, "", true},
+		{"empty auth", &api.Secret{}, "", true},
+		{"empty token value", &api.Secret{Auth: &api.SecretAuth{}}, "", true},
+		{"valid", &api.Secret{Auth: &api.SecretAuth{ClientToken: "hvs.abc"}}, "hvs.abc", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tok, err := tokenFromCreateResponse(tt.secret)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Empty(t, tok)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantTok, tok)
+		})
+	}
+}

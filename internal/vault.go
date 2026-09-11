@@ -272,6 +272,18 @@ func (v vault) createOneTimeToken(ttl string) (string, error) {
 		return "", err
 	}
 
+	return tokenFromCreateResponse(s)
+}
+
+// tokenFromCreateResponse extracts the one-time token from a token-create
+// response, guarding against a malformed success: ParseSecret returns
+// (nil, nil) for an empty body, and dereferencing s.Auth.ClientToken on that
+// would panic — in the boot self-test goroutine (no Recover middleware) or
+// in a request goroutine (500 instead of a clean error).
+func tokenFromCreateResponse(s *api.Secret) (string, error) {
+	if s == nil || s.Auth == nil || s.Auth.ClientToken == "" {
+		return "", fmt.Errorf("vault returned an empty token creation response")
+	}
 	return s.Auth.ClientToken, nil
 }
 
