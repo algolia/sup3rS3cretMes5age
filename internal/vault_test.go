@@ -167,8 +167,11 @@ func TestNewVaultFailsWhenCapabilitiesMissing(t *testing.T) {
 
 	policy := `path "auth/token/create" { capabilities = ["update"] }`
 	assert.NoError(t, c.Sys().PutPolicy("creator", policy))
+	// Renewable: a finite non-renewable token is rejected earlier at boot
+	// (no lease monitoring possible), which would mask the self-test gap.
 	secret, err := c.Auth().Token().Create(&api.TokenCreateRequest{
-		Policies: []string{"creator"},
+		Policies:  []string{"creator"},
+		Renewable: boolPtr(true),
 	})
 	if !assert.NoError(t, err) {
 		return
@@ -191,7 +194,8 @@ path "auth/token/create" { capabilities = ["update"] }
 path "secret/test/*" { capabilities = ["create", "read", "update"] }`
 	assert.NoError(t, c.Sys().PutPolicy("worker", policy))
 	secret, err := c.Auth().Token().Create(&api.TokenCreateRequest{
-		Policies: []string{"worker"},
+		Policies:  []string{"worker"},
+		Renewable: boolPtr(true),
 	})
 	if !assert.NoError(t, err) {
 		return
@@ -290,4 +294,27 @@ path "secret/test/*" { capabilities = ["create", "read", "update"] }`
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot renew itself")
+}
+
+// TestNewVaultRejectsFiniteNonRenewableToken pins the boot rejection of a
+// finite non-renewable token: it would silently expire under the running
+// server with no lease monitoring to catch it.
+func TestNewVaultRejectsFiniteNonRenewableToken(t *testing.T) {
+	ln, c := createTestVault(t)
+	defer func() { _ = ln.Close() }()
+
+	secret, err := c.Auth().Token().Create(&api.TokenCreateRequest{
+		TTL:             "60s",
+		Lease:           "60s",
+		Renewable:       boolPtr(false),
+		NoDefaultPolicy: true,
+	})
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	_, err = NewVault(context.Background(), c.Address(), "secret/test/", secret.Auth.ClientToken)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not renewable and expires")
 }
