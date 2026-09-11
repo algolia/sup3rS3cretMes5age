@@ -492,9 +492,16 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 					if isTerminalTokenError(rerr) {
 						log.Fatalf("vault auth token can no longer renew itself: %v; exiting so the supervisor can restart with a fresh token", rerr)
 					}
-					// Non-terminal (network, 5xx…): the recreated watcher's
-					// renewal loop retries with its own backoff.
-					log.Printf("vault auth token renewal re-proof failed (%v); the recreated watcher will retry", rerr)
+					// Non-terminal (network, 5xx…): with ErrorOnErrors the
+					// recreated watcher exits on its first renewal failure,
+					// so recreating it immediately would spin the loop and
+					// hammer Vault. Honor the backoff first.
+					log.Printf("vault auth token renewal re-proof failed (%v); retrying in %s", rerr, retryDelay)
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(retryDelay):
+					}
 				} else if renewed == nil || renewed.Auth == nil {
 					// Malformed success (empty body): same fail-loud
 					// treatment as an empty lookup response.
