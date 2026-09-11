@@ -352,28 +352,35 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 					return
 				case <-time.After(retryDelay):
 				}
-				fresh, lerr := c.Auth().Token().LookupSelfWithContext(ctx)
-				if lerr != nil {
-					// Auth rejection: this token can never renew again, so
-					// retrying would just spin while every request fails.
-					// Exit loudly so the supervisor restarts the process.
+				// Revalidate until we have fresh lease data: recreating the
+				// watcher from the stale boot lookup could schedule its next
+				// renewal past the token's actual expiry. An auth rejection
+				// means the token can never renew again — exit loudly so the
+				// supervisor restarts the process.
+				for {
+					fresh, lerr := c.Auth().Token().LookupSelfWithContext(ctx)
+					if lerr == nil {
+						if fresh == nil || fresh.Data == nil {
+							// Malformed Vault response: same fail-loud
+							// treatment as an empty boot lookup.
+							log.Fatalf("vault returned an empty token lookup during renewal; exiting so the supervisor can restart")
+						}
+						// Seed the next watcher with the fresh state.
+						lookup = fresh
+						break
+					}
 					if isTerminalTokenError(lerr) {
 						log.Fatalf("vault auth token is no longer valid: %v; exiting so the supervisor can restart with a fresh token", lerr)
 					}
-					// Transient (network, 5xx…): fall through and recreate
-					// the watcher, whose renewal loop retries with its own
-					// backoff.
-					continue
+					// Transient (network, 5xx…): keep retrying the lookup
+					// with backoff rather than seeding the next watcher from
+					// stale lease data.
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(retryDelay):
+					}
 				}
-				if fresh == nil || fresh.Data == nil {
-					// Malformed Vault response: same fail-loud treatment as
-					// an empty boot lookup.
-					log.Fatalf("vault returned an empty token lookup during renewal; exiting so the supervisor can restart")
-				}
-				// Seed the next watcher with the fresh state: reusing the
-				// boot lookup would schedule against a stale TTL and could
-				// sleep past the token's actual expiry.
-				lookup = fresh
 				if renewable, ok := lookup.Data["renewable"].(bool); !ok || !renewable {
 					log.Println("vault token is no longer renewable; token renewal disabled")
 					return
