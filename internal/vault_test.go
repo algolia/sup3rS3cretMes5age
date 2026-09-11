@@ -100,6 +100,7 @@ func TestIsTerminalTokenError(t *testing.T) {
 		err      error
 		terminal bool
 	}{
+		{"400 terminal renewal condition (max TTL)", &api.ResponseError{StatusCode: 400}, true},
 		{"403 auth rejection", &api.ResponseError{StatusCode: 403}, true},
 		{"404 unknown token", &api.ResponseError{StatusCode: 404}, true},
 		{"503 vault restarting", &api.ResponseError{StatusCode: 503}, false},
