@@ -115,22 +115,33 @@ func (v vault) verifyCapabilities(ctx context.Context, c *api.Client, renewable 
 		}
 	}
 
-	// Probe a concrete child path, not the bare prefix: a policy granting
-	// only "cubbyhole/" (exact match, no glob) would pass a prefix probe
-	// while every real read/write ("cubbyhole/<token>") is denied.
-	childPath := v.prefix + "capabilitycheck"
-	caps, err = c.Sys().CapabilitiesSelfWithContext(ctx, childPath)
+	// A capability probe on a sentinel path cannot prove what the real
+	// operations need: policies can grant the probe while denying the
+	// actual token paths. Run one full store/retrieve cycle through the
+	// real code path instead — it exercises token creation, the write and
+	// the read exactly as requests will. The throwaway message is consumed
+	// by the read, so the self-test leaves nothing behind.
+	if err := v.selfTest(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// selfTest performs one full store/retrieve cycle with a throwaway message
+// to prove the token can really do everything the service needs on the
+// paths actually used by Store and Get.
+func (v vault) selfTest() error {
+	const probeMsg = "boot self-test message"
+	probe, err := v.Store(probeMsg, "1m")
 	if err != nil {
-		return v.capabilitiesQueryError(err)
+		return fmt.Errorf("vault boot self-test failed on store: %w", err)
 	}
-	// Logical().Write sends a PUT, which Vault authorizes with the update
-	// capability alone: a create-only policy passes the check yet every
-	// Store is denied.
-	if !hasAnyCapability(caps, "root", "update") {
-		return fmt.Errorf("vault token lacks the required write capability on %s (need update; have %v)", childPath, caps)
+	msg, err := v.Get(probe)
+	if err != nil {
+		return fmt.Errorf("vault boot self-test failed on retrieve: %w", err)
 	}
-	if !hasAnyCapability(caps, "root", "read") {
-		return fmt.Errorf("vault token lacks the required read capability on %s (have %v)", childPath, caps)
+	if msg != probeMsg {
+		return fmt.Errorf("vault boot self-test retrieved an unexpected message")
 	}
 	return nil
 }
