@@ -71,7 +71,8 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 		return nil, fmt.Errorf("vault returned an empty token lookup response")
 	}
 
-	if err := v.verifyCapabilities(bootCtx, c); err != nil {
+	renewable, _ := lookup.Data["renewable"].(bool)
+	if err := v.verifyCapabilities(bootCtx, c, renewable); err != nil {
 		return nil, err
 	}
 
@@ -80,16 +81,19 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 }
 
 // verifyCapabilities checks that the configured token's ACLs cover the
-// operations the service performs: creating one-time tokens (auth/token/create)
-// and writing and reading the storage prefix. LookupSelf only proves
-// authentication; a token missing these capabilities would pass boot and
-// then fail on every secret operation, so the gap fails loudly here. An
-// auth rejection on the capabilities query itself means the token cannot
-// self-inspect — the check degrades to a warning rather than blocking a
-// possibly-valid deployment — but any other error (transport, 5xx, …) fails
-// boot: starting with unverified capabilities would recreate the degraded
-// state this check exists to prevent.
-func (v vault) verifyCapabilities(ctx context.Context, c *api.Client) error {
+// operations the service performs: creating one-time tokens (auth/token/create),
+// writing and reading the storage prefix, and — for a renewable token —
+// renewing itself (the LifetimeWatcher special-cases renew-self permission
+// denials into a silent non-renewable countdown, so the gap must be caught
+// here). LookupSelf only proves authentication; a token missing these
+// capabilities would pass boot and then fail on every secret operation, so
+// the gap fails loudly here. An auth rejection on the capabilities query
+// itself means the token cannot self-inspect — the check degrades to a
+// warning rather than blocking a possibly-valid deployment — but any other
+// error (transport, 5xx, …) fails boot: starting with unverified
+// capabilities would recreate the degraded state this check exists to
+// prevent.
+func (v vault) verifyCapabilities(ctx context.Context, c *api.Client, renewable bool) error {
 	caps, err := c.Sys().CapabilitiesSelfWithContext(ctx, "auth/token/create")
 	if err != nil {
 		return v.capabilitiesQueryError(err)
@@ -101,15 +105,32 @@ func (v vault) verifyCapabilities(ctx context.Context, c *api.Client) error {
 		return fmt.Errorf("vault token lacks the required capability on auth/token/create (need update; have %v)", caps)
 	}
 
-	caps, err = c.Sys().CapabilitiesSelfWithContext(ctx, v.prefix)
+	if renewable {
+		caps, err = c.Sys().CapabilitiesSelfWithContext(ctx, "auth/token/renew-self")
+		if err != nil {
+			return v.capabilitiesQueryError(err)
+		}
+		if !hasAnyCapability(caps, "root", "update") {
+			return fmt.Errorf("renewable vault token lacks the required capability on auth/token/renew-self (need update; have %v)", caps)
+		}
+	}
+
+	// Probe a concrete child path, not the bare prefix: a policy granting
+	// only "cubbyhole/" (exact match, no glob) would pass a prefix probe
+	// while every real read/write ("cubbyhole/<token>") is denied.
+	childPath := v.prefix + "capabilitycheck"
+	caps, err = c.Sys().CapabilitiesSelfWithContext(ctx, childPath)
 	if err != nil {
 		return v.capabilitiesQueryError(err)
 	}
-	if !hasAnyCapability(caps, "root", "create", "update") {
-		return fmt.Errorf("vault token lacks the required write capability on %s (need create or update; have %v)", v.prefix, caps)
+	// Logical().Write sends a PUT, which Vault authorizes with the update
+	// capability alone: a create-only policy passes the check yet every
+	// Store is denied.
+	if !hasAnyCapability(caps, "root", "update") {
+		return fmt.Errorf("vault token lacks the required write capability on %s (need update; have %v)", childPath, caps)
 	}
 	if !hasAnyCapability(caps, "root", "read") {
-		return fmt.Errorf("vault token lacks the required read capability on %s (have %v)", v.prefix, caps)
+		return fmt.Errorf("vault token lacks the required read capability on %s (have %v)", childPath, caps)
 	}
 	return nil
 }
