@@ -96,21 +96,26 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 func (v vault) verifyCapabilities(ctx context.Context, c *api.Client, renewable bool) error {
 	caps, err := c.Sys().CapabilitiesSelfWithContext(ctx, "auth/token/create")
 	if err != nil {
-		return v.capabilitiesQueryError(err)
-	}
-	// Vault evaluates token creation as an update operation: a policy
-	// granting only "create" reports "create" here yet still gets denied
-	// on the actual create call.
-	if !hasAnyCapability(caps, "root", "update") {
+		// The probe itself failed: when it was merely denied (the token
+		// cannot self-inspect), continue to the remaining checks instead of
+		// treating this probe as passed.
+		if qerr := v.capabilitiesQueryError(err); qerr != errSkippedCapabilityCheck {
+			return qerr
+		}
+	} else if !hasAnyCapability(caps, "root", "update") {
+		// Vault evaluates token creation as an update operation: a policy
+		// granting only "create" reports "create" here yet still gets denied
+		// on the actual create call.
 		return fmt.Errorf("vault token lacks the required capability on auth/token/create (need update; have %v)", caps)
 	}
 
 	if renewable {
 		caps, err = c.Sys().CapabilitiesSelfWithContext(ctx, "auth/token/renew-self")
 		if err != nil {
-			return v.capabilitiesQueryError(err)
-		}
-		if !hasAnyCapability(caps, "root", "update") {
+			if qerr := v.capabilitiesQueryError(err); qerr != errSkippedCapabilityCheck {
+				return qerr
+			}
+		} else if !hasAnyCapability(caps, "root", "update") {
 			return fmt.Errorf("renewable vault token lacks the required capability on auth/token/renew-self (need update; have %v)", caps)
 		}
 	}
@@ -121,10 +126,7 @@ func (v vault) verifyCapabilities(ctx context.Context, c *api.Client, renewable 
 	// real code path instead — it exercises token creation, the write and
 	// the read exactly as requests will. The throwaway message is consumed
 	// by the read, so the self-test leaves nothing behind.
-	if err := v.selfTest(); err != nil {
-		return err
-	}
-	return nil
+	return v.boundedSelfTest(ctx)
 }
 
 // selfTest performs one full store/retrieve cycle with a throwaway message
@@ -148,14 +150,36 @@ func (v vault) selfTest() error {
 
 // capabilitiesQueryError decides the outcome of a failed capabilities query:
 // only an auth rejection is skippable (the token cannot self-inspect, but may
-// still be fully functional); everything else means Vault itself is
-// unreliable and the unverified-capability boot must fail.
+// still be fully functional — the caller then continues to the remaining
+// checks instead of trusting a nil result); everything else means Vault
+// itself is unreliable and the unverified-capability boot must fail.
 func (v vault) capabilitiesQueryError(err error) error {
 	if isTerminalTokenError(err) {
 		log.Printf("warning: unable to verify Vault capabilities (sys/capabilities-self denied): %v", err)
-		return nil
+		return errSkippedCapabilityCheck
 	}
 	return fmt.Errorf("unable to verify Vault capabilities: %w", err)
+}
+
+// errSkippedCapabilityCheck signals that a capability probe was skipped
+// (denied sys/capabilities-self) — non-fatal, but the caller must not treat
+// the probe as passed.
+var errSkippedCapabilityCheck = errors.New("capability check skipped")
+
+// boundedSelfTest runs the boot self-test raced against the boot context:
+// the underlying Vault calls in Store/Get are contextless, so without this
+// race a Vault that accepts connections but hangs on requests could still
+// block boot indefinitely. When ctx wins, NewVault fails boot and the
+// process exits — so the losing goroutine cannot outlive it.
+func (v vault) boundedSelfTest(ctx context.Context) error {
+	done := make(chan error, 1)
+	go func() { done <- v.selfTest() }()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return fmt.Errorf("vault boot self-test timed out after %s", bootValidationTimeout)
+	}
 }
 
 // hasAnyCapability reports whether the capability list contains any of the
@@ -378,17 +402,13 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 				if isTerminalTokenError(err) {
 					log.Fatalf("vault auth token renewal terminally failed: %v; exiting so the supervisor can restart with a fresh token", err)
 				}
-				log.Printf("vault auth token lease ended (%v); revalidating in %s", err, retryDelay)
-				select {
-				case <-ctx.Done():
-					return
-				case <-time.After(retryDelay):
-				}
-				// Revalidate until we have fresh lease data: recreating the
-				// watcher from the stale boot lookup could schedule its next
-				// renewal past the token's actual expiry. An auth rejection
-				// means the token can never renew again — exit loudly so the
-				// supervisor restarts the process.
+				// Revalidate immediately, then back off only between failed
+				// lookups: sleeping before the first attempt could let a
+				// short-lived token expire during the wait, turning a
+				// recoverable outage into a fatal auth rejection. An auth
+				// rejection means the token can never renew again — exit
+				// loudly so the supervisor restarts the process.
+				log.Printf("vault auth token lease ended (%v); revalidating", err)
 				for {
 					fresh, lerr := c.Auth().Token().LookupSelfWithContext(ctx)
 					if lerr == nil {
@@ -407,6 +427,7 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 					// Transient (network, 5xx…): keep retrying the lookup
 					// with backoff rather than seeding the next watcher from
 					// stale lease data.
+					log.Printf("vault token revalidation failed (%v); retrying in %s", lerr, retryDelay)
 					select {
 					case <-ctx.Done():
 						return
