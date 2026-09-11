@@ -321,6 +321,11 @@ services:
       - IPC_LOCK
     expose:
       - 8200
+    healthcheck:
+      test: ["CMD", "vault", "status", "-address=http://localhost:8200"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   supersecret:
     build: ./
@@ -337,7 +342,11 @@ services:
       - "80:80"
       - "443:443"
     depends_on:
-      - vault
+      vault:
+        condition: service_healthy
+    # The app validates its Vault token at boot and exits non-zero if Vault
+    # is unreachable; this covers any remaining transient boot failure.
+    restart: unless-stopped
 ```
 
 ### Configuration types
