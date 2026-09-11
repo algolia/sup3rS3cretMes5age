@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -79,6 +80,18 @@ func TestGetMsgHandler(t *testing.T) {
 			expectedMsg:    "",
 			expectError:    true,
 		},
+		// The rejected token must never be reflected: the response body is
+		// constant, and echoing the token would leak it to the client and
+		// into the access log via the logger's error field.
+		{
+			name:           "rejected token is not echoed in the response",
+			token:          "hvs.REJECTEDTOKEN0000000000000",
+			storedMsg:      "",
+			storeErr:       nil,
+			expectedStatus: http.StatusBadRequest,
+			expectedMsg:    "",
+			expectError:    true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -97,6 +110,12 @@ func TestGetMsgHandler(t *testing.T) {
 				if assert.IsType(t, &echo.HTTPError{}, err) {
 					v, _ := err.(*echo.HTTPError)
 					assert.Equal(t, tt.expectedStatus, v.Code)
+					if v.Code == http.StatusBadRequest {
+						// Token-validation rejections must be constant and
+						// must never carry the rejected token.
+						assert.Equal(t, "invalid token format", v.Message)
+						assert.NotContains(t, fmt.Sprint(v.Message), tt.token)
+					}
 				}
 			} else {
 				assert.NoError(t, err)
