@@ -176,7 +176,7 @@ func TestNewVaultFailsWhenCapabilitiesMissing(t *testing.T) {
 	_, err = NewVault(context.Background(), c.Address(), "secret/test/", secret.Auth.ClientToken)
 
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "capability")
+	assert.Contains(t, err.Error(), "boot self-test failed")
 }
 
 // TestNewVaultAcceptsTokenWithSufficientCapabilities is the positive case:
