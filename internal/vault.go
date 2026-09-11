@@ -449,8 +449,12 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 					}
 				}
 				if renewable, ok := lookup.Data["renewable"].(bool); !ok || !renewable {
-					log.Println("vault token is no longer renewable; token renewal disabled")
-					return
+					// A token that starts non-renewable needs no renewal
+					// (handled at boot); one that stops being renewable
+					// after a lease end is degrading — the HTTP server
+					// would keep serving on a token that is about to die,
+					// so exit fail-loud like the other terminal paths.
+					log.Fatalf("vault auth token is no longer renewable; exiting so the supervisor can restart with a fresh token")
 				}
 				// Re-prove renew-self: the watcher special-cases renew-self
 				// permission denials into a silent non-renewable countdown,
@@ -506,7 +510,9 @@ func isTerminalTokenError(err error) bool {
 	var respErr *api.ResponseError
 	if errors.As(err, &respErr) {
 		switch respErr.StatusCode {
-		case http.StatusForbidden, http.StatusNotFound:
+		// 400 covers terminal renewal conditions — a token that reached its
+		// max TTL or is no longer renewable answers renew-self with 400.
+		case http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound:
 			return true
 		}
 	}
