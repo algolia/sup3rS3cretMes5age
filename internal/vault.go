@@ -110,13 +110,14 @@ func (v vault) verifyCapabilities(ctx context.Context, c *api.Client, renewable 
 	}
 
 	if renewable {
-		caps, err = c.Sys().CapabilitiesSelfWithContext(ctx, "auth/token/renew-self")
-		if err != nil {
-			if qerr := v.capabilitiesQueryError(err); qerr != errSkippedCapabilityCheck {
-				return qerr
-			}
-		} else if !hasAnyCapability(caps, "root", "update") {
-			return fmt.Errorf("renewable vault token lacks the required capability on auth/token/renew-self (need update; have %v)", caps)
+		// Renewal is essential for a renewable token and the lifetime
+		// watcher special-cases renew-self permission denials into a silent
+		// non-renewable countdown, so a capability probe is not enough —
+		// prove it functionally with a real renewal (the default increment
+		// also refreshes the lease, which the renewal loop does anyway).
+		// This works even when the token cannot query its own capabilities.
+		if _, rerr := c.Auth().Token().RenewSelfWithContext(ctx, 0); rerr != nil {
+			return fmt.Errorf("renewable vault token cannot renew itself: %w", rerr)
 		}
 	}
 
@@ -437,6 +438,17 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 				if renewable, ok := lookup.Data["renewable"].(bool); !ok || !renewable {
 					log.Println("vault token is no longer renewable; token renewal disabled")
 					return
+				}
+				// Re-prove renew-self: the watcher special-cases renew-self
+				// permission denials into a silent non-renewable countdown,
+				// so a revocation mid-flight would otherwise cycle through
+				// watchers without ever failing loudly. A terminal failure
+				// here means the token can never renew again.
+				renewCtx, cancel := context.WithTimeout(ctx, retryDelay)
+				_, rerr := c.Auth().Token().RenewSelfWithContext(renewCtx, 0)
+				cancel()
+				if rerr != nil && isTerminalTokenError(rerr) {
+					log.Fatalf("vault auth token can no longer renew itself: %v; exiting so the supervisor can restart with a fresh token", rerr)
 				}
 
 			// RenewCh is a channel that receives a message when a successful
