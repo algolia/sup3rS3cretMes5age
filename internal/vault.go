@@ -84,9 +84,12 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 		if rerr != nil {
 			return nil, fmt.Errorf("renewable vault token cannot renew itself: %w", rerr)
 		}
-		if renewed != nil && renewed.Auth != nil {
-			lookup.Data["ttl"] = float64(renewed.Auth.LeaseDuration)
+		// ParseSecret returns (nil, nil) for an empty body; accepting that
+		// here would pass the renewal check without proving a valid lease.
+		if renewed == nil || renewed.Auth == nil {
+			return nil, fmt.Errorf("vault returned an empty token renewal response")
 		}
+		lookup.Data["ttl"] = float64(renewed.Auth.LeaseDuration)
 	}
 	if err := v.verifyCapabilities(bootCtx, c); err != nil {
 		return nil, err
@@ -471,7 +474,11 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 					// Non-terminal (network, 5xx…): the recreated watcher's
 					// renewal loop retries with its own backoff.
 					log.Printf("vault auth token renewal re-proof failed (%v); the recreated watcher will retry", rerr)
-				} else if renewed != nil && renewed.Auth != nil {
+				} else if renewed == nil || renewed.Auth == nil {
+					// Malformed success (empty body): same fail-loud
+					// treatment as an empty lookup response.
+					log.Fatalf("vault returned an empty token renewal response during renewal; exiting so the supervisor can restart")
+				} else {
 					lookup.Data["ttl"] = float64(renewed.Auth.LeaseDuration)
 				}
 
