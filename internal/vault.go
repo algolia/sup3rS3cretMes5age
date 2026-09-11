@@ -72,14 +72,26 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 	}
 
 	renewable, _ := lookup.Data["renewable"].(bool)
+	if !renewable {
+		// A finite non-renewable token would silently expire under the
+		// running server (non-renewable does not mean non-expiring), with
+		// no lease monitoring to catch it. Reject it at boot; the Vault dev
+		// root token (non-renewable, no TTL) is unaffected.
+		if ttl := leaseDuration(lookup); ttl > 0 {
+			return nil, fmt.Errorf("vault token is not renewable and expires in %ds; use a renewable token or a non-expiring one", ttl)
+		}
+	}
+	if err := v.verifyCapabilities(bootCtx, c); err != nil {
+		return nil, err
+	}
 	if renewable {
 		// Renewal is essential for a renewable token and the lifetime
 		// watcher special-cases renew-self permission denials into a silent
 		// non-renewable countdown, so prove it functionally with a real
-		// renewal (the default increment also refreshes the lease, which
-		// the renewal loop does anyway). This works even when the token
-		// cannot query its own capabilities. The refreshed lease seeds the
-		// renewal watcher — the boot lookup's TTL may already be near zero.
+		// renewal. Run it AFTER the self-test (which consumes part of the
+		// lease) so the refreshed TTL below is measured close to the
+		// watcher's start; this works even when the token cannot query its
+		// own capabilities.
 		renewed, rerr := c.Auth().Token().RenewSelfWithContext(bootCtx, 0)
 		if rerr != nil {
 			return nil, fmt.Errorf("renewable vault token cannot renew itself: %w", rerr)
@@ -90,9 +102,6 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 			return nil, fmt.Errorf("vault returned an empty token renewal response")
 		}
 		lookup.Data["ttl"] = float64(renewed.Auth.LeaseDuration)
-	}
-	if err := v.verifyCapabilities(bootCtx, c); err != nil {
-		return nil, err
 	}
 
 	go v.renewToken(ctx, c, lookup)
