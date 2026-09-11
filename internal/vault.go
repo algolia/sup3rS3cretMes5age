@@ -72,7 +72,23 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 	}
 
 	renewable, _ := lookup.Data["renewable"].(bool)
-	if err := v.verifyCapabilities(bootCtx, c, renewable); err != nil {
+	if renewable {
+		// Renewal is essential for a renewable token and the lifetime
+		// watcher special-cases renew-self permission denials into a silent
+		// non-renewable countdown, so prove it functionally with a real
+		// renewal (the default increment also refreshes the lease, which
+		// the renewal loop does anyway). This works even when the token
+		// cannot query its own capabilities. The refreshed lease seeds the
+		// renewal watcher — the boot lookup's TTL may already be near zero.
+		renewed, rerr := c.Auth().Token().RenewSelfWithContext(bootCtx, 0)
+		if rerr != nil {
+			return nil, fmt.Errorf("renewable vault token cannot renew itself: %w", rerr)
+		}
+		if renewed != nil && renewed.Auth != nil {
+			lookup.Data["ttl"] = float64(renewed.Auth.LeaseDuration)
+		}
+	}
+	if err := v.verifyCapabilities(bootCtx, c); err != nil {
 		return nil, err
 	}
 
@@ -93,7 +109,7 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 // error (transport, 5xx, …) fails boot: starting with unverified
 // capabilities would recreate the degraded state this check exists to
 // prevent.
-func (v vault) verifyCapabilities(ctx context.Context, c *api.Client, renewable bool) error {
+func (v vault) verifyCapabilities(ctx context.Context, c *api.Client) error {
 	caps, err := c.Sys().CapabilitiesSelfWithContext(ctx, "auth/token/create")
 	if err != nil {
 		// The probe itself failed: when it was merely denied (the token
@@ -107,18 +123,6 @@ func (v vault) verifyCapabilities(ctx context.Context, c *api.Client, renewable 
 		// granting only "create" reports "create" here yet still gets denied
 		// on the actual create call.
 		return fmt.Errorf("vault token lacks the required capability on auth/token/create (need update; have %v)", caps)
-	}
-
-	if renewable {
-		// Renewal is essential for a renewable token and the lifetime
-		// watcher special-cases renew-self permission denials into a silent
-		// non-renewable countdown, so a capability probe is not enough —
-		// prove it functionally with a real renewal (the default increment
-		// also refreshes the lease, which the renewal loop does anyway).
-		// This works even when the token cannot query its own capabilities.
-		if _, rerr := c.Auth().Token().RenewSelfWithContext(ctx, 0); rerr != nil {
-			return fmt.Errorf("renewable vault token cannot renew itself: %w", rerr)
-		}
 	}
 
 	// A capability probe on a sentinel path cannot prove what the real
@@ -177,6 +181,11 @@ func (v vault) boundedSelfTest(ctx context.Context) error {
 	go func() { done <- v.selfTest() }()
 	select {
 	case err := <-done:
+		if ctx.Err() != nil {
+			// The boot bound expired; a self-test finishing late must not
+			// let startup proceed past it.
+			return fmt.Errorf("vault boot self-test timed out after %s", bootValidationTimeout)
+		}
 		return err
 	case <-ctx.Done():
 		return fmt.Errorf("vault boot self-test timed out after %s", bootValidationTimeout)
@@ -411,7 +420,11 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 				// loudly so the supervisor restarts the process.
 				log.Printf("vault auth token lease ended (%v); revalidating", err)
 				for {
-					fresh, lerr := c.Auth().Token().LookupSelfWithContext(ctx)
+					// Bound each lookup attempt: an unresponsive Vault must
+					// not block the renewal loop indefinitely.
+					lookupCtx, cancelLookup := context.WithTimeout(ctx, bootValidationTimeout)
+					fresh, lerr := c.Auth().Token().LookupSelfWithContext(lookupCtx)
+					cancelLookup()
 					if lerr == nil {
 						if fresh == nil || fresh.Data == nil {
 							// Malformed Vault response: same fail-loud
@@ -442,13 +455,20 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 				// Re-prove renew-self: the watcher special-cases renew-self
 				// permission denials into a silent non-renewable countdown,
 				// so a revocation mid-flight would otherwise cycle through
-				// watchers without ever failing loudly. A terminal failure
-				// here means the token can never renew again.
+				// watchers without ever failing loudly. A successful renewal
+				// also refreshes the lease, which seeds the next watcher.
 				renewCtx, cancel := context.WithTimeout(ctx, retryDelay)
-				_, rerr := c.Auth().Token().RenewSelfWithContext(renewCtx, 0)
+				renewed, rerr := c.Auth().Token().RenewSelfWithContext(renewCtx, 0)
 				cancel()
-				if rerr != nil && isTerminalTokenError(rerr) {
-					log.Fatalf("vault auth token can no longer renew itself: %v; exiting so the supervisor can restart with a fresh token", rerr)
+				if rerr != nil {
+					if isTerminalTokenError(rerr) {
+						log.Fatalf("vault auth token can no longer renew itself: %v; exiting so the supervisor can restart with a fresh token", rerr)
+					}
+					// Non-terminal (network, 5xx…): the recreated watcher's
+					// renewal loop retries with its own backoff.
+					log.Printf("vault auth token renewal re-proof failed (%v); the recreated watcher will retry", rerr)
+				} else if renewed != nil && renewed.Auth != nil {
+					lookup.Data["ttl"] = float64(renewed.Auth.LeaseDuration)
 				}
 
 			// RenewCh is a channel that receives a message when a successful
