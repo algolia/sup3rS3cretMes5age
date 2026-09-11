@@ -65,6 +65,11 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 	if err != nil {
 		return nil, fmt.Errorf("vault connection or token validation failed (check VAULT_ADDR and VAULT_TOKEN): %w", err)
 	}
+	// ParseSecret returns (nil, nil) for an empty response body; proceeding
+	// would panic in the renewal goroutine on lookup.Data.
+	if lookup == nil || lookup.Data == nil {
+		return nil, fmt.Errorf("vault returned an empty token lookup response")
+	}
 
 	if err := v.verifyCapabilities(bootCtx, c); err != nil {
 		return nil, err
@@ -290,13 +295,16 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 		// LifetimeWatcher schedules its first renewal from
 		// SecretAuth.LeaseDuration, and leaving it zero would make the
 		// watcher fall back to its own default timing instead of the
-		// token's actual TTL.
+		// token's actual TTL. RenewBehaviorErrorOnErrors surfaces renewal
+		// failures on DoneCh instead of silently converting them into a
+		// non-renewable countdown.
 		watcher, err := c.NewLifetimeWatcher(&api.LifetimeWatcherInput{
 			Secret: &api.Secret{Auth: &api.SecretAuth{
 				ClientToken:   c.Token(),
 				Renewable:     true,
 				LeaseDuration: leaseDuration(lookup),
 			}},
+			RenewBehavior: api.RenewBehaviorErrorOnErrors,
 		})
 		if err != nil {
 			log.Printf("unable to initialize auth token lifetime watcher: %v", err)
@@ -330,13 +338,22 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 			case err := <-watcher.DoneCh():
 				watcher.Stop()
 				watcherDone = true
+				// The watcher runs with RenewBehaviorErrorOnErrors, so a
+				// failed renewal reaches DoneCh as an error instead of being
+				// converted into a non-renewable countdown. A renew-self
+				// rejection means this token can never renew again — exit
+				// loudly so the supervisor restarts with a fresh token.
+				if isTerminalTokenError(err) {
+					log.Fatalf("vault auth token renewal terminally failed: %v; exiting so the supervisor can restart with a fresh token", err)
+				}
 				log.Printf("vault auth token lease ended (%v); revalidating in %s", err, retryDelay)
 				select {
 				case <-ctx.Done():
 					return
 				case <-time.After(retryDelay):
 				}
-				if _, lerr := c.Auth().Token().LookupSelfWithContext(ctx); lerr != nil {
+				fresh, lerr := c.Auth().Token().LookupSelfWithContext(ctx)
+				if lerr != nil {
 					// Auth rejection: this token can never renew again, so
 					// retrying would just spin while every request fails.
 					// Exit loudly so the supervisor restarts the process.
@@ -346,6 +363,20 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 					// Transient (network, 5xx…): fall through and recreate
 					// the watcher, whose renewal loop retries with its own
 					// backoff.
+					continue
+				}
+				if fresh == nil || fresh.Data == nil {
+					// Malformed Vault response: same fail-loud treatment as
+					// an empty boot lookup.
+					log.Fatalf("vault returned an empty token lookup during renewal; exiting so the supervisor can restart")
+				}
+				// Seed the next watcher with the fresh state: reusing the
+				// boot lookup would schedule against a stale TTL and could
+				// sleep past the token's actual expiry.
+				lookup = fresh
+				if renewable, ok := lookup.Data["renewable"].(bool); !ok || !renewable {
+					log.Println("vault token is no longer renewable; token renewal disabled")
+					return
 				}
 
 			// RenewCh is a channel that receives a message when a successful
