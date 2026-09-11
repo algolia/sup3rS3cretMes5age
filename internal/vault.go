@@ -341,7 +341,18 @@ func (v vault) Get(token string) (msg string, err error) {
 	if err != nil {
 		return "", redactTokenFromError(err, token)
 	}
-	return r.Data["msg"].(string), nil
+	// ParseSecret returns (nil, nil) for an empty body, and the msg field
+	// could be missing or not a string; dereferencing unguarded would panic
+	// the self-test goroutine or a request goroutine instead of returning
+	// the error the handlers expect.
+	if r == nil || r.Data == nil {
+		return "", fmt.Errorf("vault returned an empty secret response")
+	}
+	msg, ok := r.Data["msg"].(string)
+	if !ok {
+		return "", fmt.Errorf("vault returned a secret without a readable message")
+	}
+	return msg, nil
 }
 
 // newVaultClientWithToken creates a Vault client authenticated with a specific token.
