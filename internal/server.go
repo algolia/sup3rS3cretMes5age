@@ -7,7 +7,11 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/labstack/echo/v4"
@@ -194,6 +198,116 @@ func (s *Server) handler() http.Handler {
 	return s.echo
 }
 
+// redactTokens strips the values of token-bearing query parameters from a
+// request URI before it reaches the access logs. One-time Vault tokens must
+// never be logged: a token in the access log is a second copy of the secret,
+// readable by anyone with log access before the first retrieval consumes it.
+// Parameter names are preserved (token, filetoken, lang, filename, ttl, …)
+// so debugging keeps its context; only the values are masked.
+func redactTokens(rawURI string) string {
+	// dropQuery removes everything from '?' onward: the fallback when the
+	// query cannot be parsed reliably enough to redact it.
+	dropQuery := func() string {
+		if idx := strings.Index(rawURI, "?"); idx >= 0 {
+			return rawURI[:idx]
+		}
+		return rawURI
+	}
+
+	u, err := url.Parse(rawURI)
+	if err != nil {
+		// Unparseable URI: drop the query entirely rather than risk
+		// logging a token we failed to redact.
+		return dropQuery()
+	}
+	// u.Query() would silently discard malformed pairs (e.g. a token value
+	// containing an invalid % escape), leaving such a token unredacted;
+	// parse the raw query explicitly and treat a failure like an
+	// unparseable URI.
+	q, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return dropQuery()
+	}
+	changed := false
+	for name := range q {
+		if strings.Contains(strings.ToLower(name), "token") {
+			q.Set(name, "REDACTED")
+			changed = true
+		}
+	}
+	if !changed {
+		return rawURI
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+// trustedClientIP identifies the client to rate-limit on, without trusting
+// X-Forwarded-For unless it is safe to do so.
+//
+// Echo's ctx.RealIP() honors X-Forwarded-For unconditionally, so behind no
+// proxy (or an untrusted one) an attacker can send a fresh header on every
+// request and get a fresh rate-limit bucket, defeating the per-IP limit.
+// Instead:
+//   - no trusted proxies configured → always the connection peer;
+//   - peer is NOT a trusted proxy → the connection peer (headers ignored —
+//     only a trusted intermediary can speak for the client);
+//   - peer IS a trusted proxy → walk X-Forwarded-For right to left, skipping
+//     trusted hops, and use the first untrusted address as the client
+//     (the standard interpretation, robust to proxies that append). If a
+//     malformed entry is hit, or every entry claims to be a trusted proxy,
+//     the chain cannot be vouched for and the connection peer is used —
+//     never an address the request itself selected.
+//
+// An unparseable RemoteAddr fails closed (error → 429) rather than opening
+// an unauthenticated bucket.
+func trustedClientIP(remoteAddr string, forwardedFor string, trusted []*net.IPNet) (string, error) {
+	peerHost, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		// RemoteAddr without a port (rare in tests): use it as-is.
+		peerHost = remoteAddr
+	}
+	peer := net.ParseIP(peerHost)
+	if peer == nil {
+		return "", fmt.Errorf("unable to determine client address from %q", remoteAddr)
+	}
+
+	if len(trusted) == 0 || !containsIP(trusted, peer) {
+		return peer.String(), nil
+	}
+
+	// Walk X-Forwarded-For right to left: entries on the right were added by
+	// the closest proxies and are the only ones a trusted proxy chain vouches for.
+	parts := strings.Split(forwardedFor, ",")
+	for i := len(parts) - 1; i >= 0; i-- {
+		candidate := net.ParseIP(strings.TrimSpace(parts[i]))
+		if candidate == nil {
+			// Malformed entry: the chain is not trustworthy past this point,
+			// and returning any already-seen entry would let an attacker
+			// behind the proxy rotate buckets with crafted garbage. Fall
+			// back to the connection peer.
+			return peer.String(), nil
+		}
+		if !containsIP(trusted, candidate) {
+			return candidate.String(), nil
+		}
+	}
+	// Every entry claims to be a trusted proxy: the real client sits to the
+	// left of anything we can vouch for, so the leftmost entry is
+	// attacker-chosen too. Fall back to the connection peer.
+	return peer.String(), nil
+}
+
+// containsIP reports whether ip falls within any of the networks.
+func containsIP(networks []*net.IPNet, ip net.IP) bool {
+	for _, network := range networks {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 // setupMiddlewares configures Echo's middleware stack with security, rate limiting, and logging.
 // It applies HTTPS redirect (if enabled), CORS policy, rate limiting (5 RPS), request logging,
 // security headers (CSP, XSS protection, HSTS), body size limits (50MB), and panic recovery.
@@ -220,9 +334,23 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 			},
 		),
 		IdentifierExtractor: func(ctx echo.Context) (string, error) {
-			return ctx.RealIP(), nil
+			// Header.Get returns only the first field; a trusted proxy that
+			// APPENDS its entry as a second X-Forwarded-For field would be
+			// invisible to the walk, leaving the attacker-controlled first
+			// field in charge. Combine every field into one chain.
+			return trustedClientIP(ctx.Request().RemoteAddr,
+				strings.Join(ctx.Request().Header.Values(echo.HeaderXForwardedFor), ","), cnf.TrustedProxies)
 		},
 		DenyHandler: func(ctx echo.Context, identifier string, err error) error {
+			return ctx.JSON(http.StatusTooManyRequests, map[string]string{
+				"error": "rate limit exceeded",
+			})
+		},
+		// Echo routes IdentifierExtractor errors here, not to DenyHandler;
+		// the default ErrorHandler would answer 403 with the raw error.
+		// An unusable client identifier must fail closed with the same
+		// constant 429 response as an exhausted bucket.
+		ErrorHandler: func(ctx echo.Context, err error) error {
 			return ctx.JSON(http.StatusTooManyRequests, map[string]string{
 				"error": "rate limit exceeded",
 			})
@@ -252,7 +380,7 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 				"remote_ip":     v.RemoteIP,
 				"host":          v.Host,
 				"method":        v.Method,
-				"uri":           v.URI,
+				"uri":           redactTokens(v.URI),
 				"user_agent":    v.UserAgent,
 				"status":        v.Status,
 				"error":         "",

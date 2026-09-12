@@ -292,7 +292,11 @@ o secret-file.txt
 ## Configuration options
 
 * `VAULT_ADDR`: address of the Vault server used for storing the temporary secrets.
-* `VAULT_TOKEN`: Vault token used to authenticate to the Vault server.
+* `VAULT_TOKEN`: Vault token used to authenticate to the Vault server. The token must have these capabilities, verified at startup:
+  * `update` on `auth/token/create` — to mint the one-time retrieval tokens;
+  * `create`/`update` **and** `read` on children of the storage prefix (e.g. `cubbyhole/*`) — to store and read the secrets (`create` covers the first write to a fresh `<prefix>/<token>` path, `update` the rest);
+  * for a **renewable** token: `update` on `auth/token/renew-self` — to renew the lease.
+  `lookup-self`/`renew-self` access normally comes from Vault's `default` policy. `sys/capabilities-self` is optional: when denied, the startup check is skipped with a warning instead of blocking a possibly-valid deployment.
 * `SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS`: HTTP binding address (e.g. `:80`).
 * `SUPERSECRETMESSAGE_HTTPS_BINDING_ADDRESS`: HTTPS binding address (e.g. `:443`).
 * `SUPERSECRETMESSAGE_HTTPS_REDIRECT_ENABLED`: whether to enable HTTPS redirection or not (e.g. `true`).
@@ -300,23 +304,30 @@ o secret-file.txt
 * `SUPERSECRETMESSAGE_TLS_CERT_FILEPATH`: certificate filepath to use for "manual" TLS.
 * `SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH`: certificate key filepath to use for "manual" TLS.
 * `SUPERSECRETMESSAGE_VAULT_PREFIX`: vault prefix for secrets (default `cubbyhole/`)
+* `SUPERSECRETMESSAGE_TRUSTED_PROXIES`: comma-separated list of trusted proxy IP addresses or CIDR networks (e.g. `10.0.0.1,192.168.0.0/16`). When set, clients are identified from `X-Forwarded-For` **only** for requests whose connection peer is one of these proxies; otherwise the connection peer itself is used. Leave unset when the application is directly exposed: without it, `X-Forwarded-For` is never honored, which prevents rate-limit bypass through spoofed headers.
 
 ## Configuration examples
 
 Here is an example of a functionnal docker-compose.yml file
 ```yaml
-version: '3.2'
-
 services:
   vault:
     image: vault:latest
     container_name: vault
     environment:
       VAULT_DEV_ROOT_TOKEN_ID: root
+      # The dev server binds container loopback by default; without this the
+      # healthcheck (localhost) reports healthy while the app cannot reach it.
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
     cap_add:
       - IPC_LOCK
     expose:
       - 8200
+    healthcheck:
+      test: ["CMD", "vault", "status", "-address=http://localhost:8200"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   supersecret:
     build: ./
@@ -333,7 +344,11 @@ services:
       - "80:80"
       - "443:443"
     depends_on:
-      - vault
+      vault:
+        condition: service_healthy
+    # The app validates its Vault token at boot and exits non-zero if Vault
+    # is unreachable; this covers any remaining transient boot failure.
+    restart: unless-stopped
 ```
 
 ### Configuration types
