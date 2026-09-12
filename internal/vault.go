@@ -71,7 +71,17 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 		return nil, fmt.Errorf("vault returned an empty token lookup response")
 	}
 
-	renewable, _ := lookup.Data["renewable"].(bool)
+	renewable, hasRenewable := lookup.Data["renewable"].(bool)
+	if !hasRenewable {
+		// The root token's lookup legitimately omits renewable (it is
+		// non-renewable with no TTL). But a lookup with neither renewable
+		// nor ttl is malformed: accepting it would silently disable renewal
+		// on a possibly-finite token.
+		if _, hasTTL := lookup.Data["ttl"]; !hasTTL {
+			return nil, fmt.Errorf("vault returned a token lookup without renewable or ttl information")
+		}
+		renewable = false
+	}
 	if !renewable {
 		// A finite non-renewable token would silently expire under the
 		// running server (non-renewable does not mean non-expiring), with
@@ -525,6 +535,11 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 			// renewal takes place and includes metadata about the renewal.
 			// Stay on the same watcher: it keeps running and renewing.
 			case info := <-watcher.RenewCh():
+				// A malformed renewal confirmation (nil secret/auth) must
+				// take the controlled fail-loud path, not panic the process.
+				if info.Secret == nil || info.Secret.Auth == nil {
+					log.Fatalf("vault returned an empty renewal confirmation; exiting so the supervisor can restart")
+				}
 				log.Printf("auth token: successfully renewed; remaining duration: %ds", info.Secret.Auth.LeaseDuration)
 			}
 		}
