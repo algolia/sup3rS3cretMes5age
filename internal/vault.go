@@ -464,71 +464,79 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 				// rejection means the token can never renew again — exit
 				// loudly so the supervisor restarts the process.
 				log.Printf("vault auth token lease ended (%v); revalidating", err)
+				// Revalidate and re-prove until renewal succeeds: after a
+				// backoff the previously fetched lease data is stale (the
+				// lease kept aging), so the cycle restarts from a fresh
+				// lookup and only a proven renewal seeds the next watcher.
 				for {
 					// Bound each lookup attempt: an unresponsive Vault must
 					// not block the renewal loop indefinitely.
 					lookupCtx, cancelLookup := context.WithTimeout(ctx, bootValidationTimeout)
 					fresh, lerr := c.Auth().Token().LookupSelfWithContext(lookupCtx)
 					cancelLookup()
-					if lerr == nil {
-						if fresh == nil || fresh.Data == nil {
-							// Malformed Vault response: same fail-loud
-							// treatment as an empty boot lookup.
-							log.Fatalf("vault returned an empty token lookup during renewal; exiting so the supervisor can restart")
+					if lerr != nil {
+						if isTerminalTokenError(lerr) {
+							log.Fatalf("vault auth token is no longer valid: %v; exiting so the supervisor can restart with a fresh token", lerr)
 						}
-						// Seed the next watcher with the fresh state.
-						lookup = fresh
-						break
+						// Transient (network, 5xx…): keep retrying the lookup
+						// with backoff rather than seeding the next watcher
+						// from stale lease data.
+						log.Printf("vault token revalidation failed (%v); retrying in %s", lerr, retryDelay)
+						select {
+						case <-ctx.Done():
+							return
+						case <-time.After(retryDelay):
+						}
+						continue
 					}
-					if isTerminalTokenError(lerr) {
-						log.Fatalf("vault auth token is no longer valid: %v; exiting so the supervisor can restart with a fresh token", lerr)
+					if fresh == nil || fresh.Data == nil {
+						// Malformed Vault response: same fail-loud
+						// treatment as an empty boot lookup.
+						log.Fatalf("vault returned an empty token lookup during renewal; exiting so the supervisor can restart")
 					}
-					// Transient (network, 5xx…): keep retrying the lookup
-					// with backoff rather than seeding the next watcher from
-					// stale lease data.
-					log.Printf("vault token revalidation failed (%v); retrying in %s", lerr, retryDelay)
-					select {
-					case <-ctx.Done():
-						return
-					case <-time.After(retryDelay):
+					// Work against the fresh state from here on.
+					lookup = fresh
+					if renewable, ok := lookup.Data["renewable"].(bool); !ok || !renewable {
+						// A token that starts non-renewable needs no renewal
+						// (handled at boot); one that stops being renewable
+						// after a lease end is degrading — the HTTP server
+						// would keep serving on a token that is about to die,
+						// so exit fail-loud like the other terminal paths.
+						log.Fatalf("vault auth token is no longer renewable; exiting so the supervisor can restart with a fresh token")
 					}
-				}
-				if renewable, ok := lookup.Data["renewable"].(bool); !ok || !renewable {
-					// A token that starts non-renewable needs no renewal
-					// (handled at boot); one that stops being renewable
-					// after a lease end is degrading — the HTTP server
-					// would keep serving on a token that is about to die,
-					// so exit fail-loud like the other terminal paths.
-					log.Fatalf("vault auth token is no longer renewable; exiting so the supervisor can restart with a fresh token")
-				}
-				// Re-prove renew-self: the watcher special-cases renew-self
-				// permission denials into a silent non-renewable countdown,
-				// so a revocation mid-flight would otherwise cycle through
-				// watchers without ever failing loudly. A successful renewal
-				// also refreshes the lease, which seeds the next watcher.
-				renewCtx, cancel := context.WithTimeout(ctx, retryDelay)
-				renewed, rerr := c.Auth().Token().RenewSelfWithContext(renewCtx, 0)
-				cancel()
-				if rerr != nil {
-					if isTerminalTokenError(rerr) {
-						log.Fatalf("vault auth token can no longer renew itself: %v; exiting so the supervisor can restart with a fresh token", rerr)
+					// Re-prove renew-self: the watcher special-cases renew-self
+					// permission denials into a silent non-renewable countdown,
+					// so a revocation mid-flight would otherwise cycle through
+					// watchers without ever failing loudly. A successful renewal
+					// also refreshes the lease, which seeds the next watcher.
+					renewCtx, cancel := context.WithTimeout(ctx, retryDelay)
+					renewed, rerr := c.Auth().Token().RenewSelfWithContext(renewCtx, 0)
+					cancel()
+					if rerr != nil {
+						if isTerminalTokenError(rerr) {
+							log.Fatalf("vault auth token can no longer renew itself: %v; exiting so the supervisor can restart with a fresh token", rerr)
+						}
+						// Non-terminal (network, 5xx…): with ErrorOnErrors the
+						// recreated watcher exits on its first renewal failure,
+						// so recreating it immediately would spin the loop and
+						// hammer Vault — and seeding it from the pre-backoff
+						// TTL would ignore the lease aging during the wait.
+						// Back off, then restart the cycle from a fresh lookup.
+						log.Printf("vault auth token renewal re-proof failed (%v); retrying in %s", rerr, retryDelay)
+						select {
+						case <-ctx.Done():
+							return
+						case <-time.After(retryDelay):
+						}
+						continue
 					}
-					// Non-terminal (network, 5xx…): with ErrorOnErrors the
-					// recreated watcher exits on its first renewal failure,
-					// so recreating it immediately would spin the loop and
-					// hammer Vault. Honor the backoff first.
-					log.Printf("vault auth token renewal re-proof failed (%v); retrying in %s", rerr, retryDelay)
-					select {
-					case <-ctx.Done():
-						return
-					case <-time.After(retryDelay):
+					if renewed == nil || renewed.Auth == nil {
+						// Malformed success (empty body): same fail-loud
+						// treatment as an empty lookup response.
+						log.Fatalf("vault returned an empty token renewal response during renewal; exiting so the supervisor can restart")
 					}
-				} else if renewed == nil || renewed.Auth == nil {
-					// Malformed success (empty body): same fail-loud
-					// treatment as an empty lookup response.
-					log.Fatalf("vault returned an empty token renewal response during renewal; exiting so the supervisor can restart")
-				} else {
 					lookup.Data["ttl"] = float64(renewed.Auth.LeaseDuration)
+					break
 				}
 
 			// RenewCh is a channel that receives a message when a successful

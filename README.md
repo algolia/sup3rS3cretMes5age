@@ -316,6 +316,9 @@ services:
     container_name: vault
     environment:
       VAULT_DEV_ROOT_TOKEN_ID: root
+      # The dev server binds container loopback by default; without this the
+      # healthcheck (localhost) reports healthy while the app cannot reach it.
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
     cap_add:
       - IPC_LOCK
     expose:
