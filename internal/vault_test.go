@@ -201,7 +201,11 @@ path "secret/test/*" { capabilities = ["create", "read", "update"] }`
 		return
 	}
 
-	v, err := NewVault(context.Background(), c.Address(), "secret/test/", secret.Auth.ClientToken)
+	// t.Context() is cancelled when the test finishes: this is the only
+	// test whose NewVault succeeds, so it starts the renewal goroutine —
+	// without a cancellable context that goroutine would keep retrying
+	// against the closed Vault for the rest of the test binary's lifetime.
+	v, err := NewVault(t.Context(), c.Address(), "secret/test/", secret.Auth.ClientToken)
 	assert.NoError(t, err)
 
 	token, err := v.Store("round trip", "")
