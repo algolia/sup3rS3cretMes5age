@@ -22,7 +22,7 @@ Read more about the reasoning behind this project in the [relevant blog post](ht
 - **📎 File Upload Support**: Share files up to 50MB with base64 encoding
 - **🔐 Vault-Backed Security**: Uses HashiCorp Vault's cubbyhole for tamper-proof storage
 - **🎫 One-Time Tokens**: Vault tokens with exactly 2 uses (create + retrieve)
-- **🚦 Rate Limiting**: Built-in protection (10 requests/second)
+- **🚦 Rate Limiting**: Built-in protection (5 requests/second, burst 10)
 - **🔒 TLS/HTTPS Support**: 
   - Automatic TLS via [Let's Encrypt](https://letsencrypt.org/)
   - Manual certificate configuration
@@ -188,7 +188,7 @@ See [configuration examples](#configuration-examples) below.
 - ✅ Use HTTPS/TLS in production
 - ✅ Use a production Vault server (not dev mode)
 - ✅ Rotate Vault tokens regularly
-- ✅ Enable rate limiting (built-in: 10 req/s)
+- ✅ Enable rate limiting (built-in: 5 req/s, burst 10)
 - ✅ Monitor Vault audit logs
 - ✅ Use strong Vault policies
 - ✅ Keep dependencies updated
@@ -296,6 +296,7 @@ o secret-file.txt
   * `update` on `auth/token/create` — to mint the one-time retrieval tokens;
   * `create`/`update` **and** `read` on children of the storage prefix (e.g. `cubbyhole/*`) — to store and read the secrets (`create` covers the first write to a fresh `<prefix>/<token>` path, `update` the rest);
   * for a **renewable** token: `update` on `auth/token/renew-self` — to renew the lease.
+  The token must also be either **renewable** or **non-expiring** (no TTL): a non-renewable token with a finite TTL is rejected at startup, because it would silently expire while the server is running with no lease monitoring to catch it. The token must have **unlimited uses** (`num_uses` 0 or unset): the startup checks themselves consume uses, and an exhausted token would make every request fail.
   `lookup-self`/`renew-self` access normally comes from Vault's `default` policy. `sys/capabilities-self` is optional: when denied, the startup check is skipped with a warning instead of blocking a possibly-valid deployment.
 * `SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS`: HTTP binding address (e.g. `:80`).
 * `SUPERSECRETMESSAGE_HTTPS_BINDING_ADDRESS`: HTTPS binding address (e.g. `:443`).
