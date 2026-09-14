@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -662,8 +663,11 @@ func tokenTTLSeconds(lookup *api.Secret) (int, error) {
 	}
 	switch ttl := raw.(type) {
 	case float64:
-		if ttl < 0 {
-			return 0, fmt.Errorf("negative ttl value %v", ttl)
+		// A fractional or out-of-range value would truncate to a wrong
+		// integer — 0.5 becomes 0, which reads as "no expiry" — so only an
+		// exact non-negative integer is accepted.
+		if ttl < 0 || ttl != math.Trunc(ttl) || ttl > math.MaxInt32 {
+			return 0, fmt.Errorf("malformed ttl value %v", ttl)
 		}
 		return int(ttl), nil
 	case json.Number:

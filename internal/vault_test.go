@@ -284,6 +284,8 @@ func TestTokenTTLSeconds(t *testing.T) {
 		{"zero ttl is valid (no expiry)", map[string]any{"ttl": float64(0)}, 0, false},
 		{"negative float64 ttl", map[string]any{"ttl": float64(-5)}, 0, true},
 		{"negative json.Number ttl", map[string]any{"ttl": json.Number("-5")}, 0, true},
+		{"fractional float64 ttl truncates to no-expiry", map[string]any{"ttl": float64(0.5)}, 0, true},
+		{"out-of-range float64 ttl overflows", map[string]any{"ttl": float64(1e20)}, 0, true},
 		{"string ttl", map[string]any{"ttl": "60s"}, 0, true},
 		{"non-numeric json.Number ttl", map[string]any{"ttl": json.Number("abc")}, 0, true},
 		{"missing ttl", map[string]any{}, 0, true},
