@@ -79,14 +79,32 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 		return nil, fmt.Errorf("vault returned an empty token lookup response")
 	}
 
+	// A token with a finite use count is a trap: the boot probes below
+	// (lookup, self-test, renewal proof) consume uses, and once exhausted
+	// the server starts failing on every request with no lease monitoring
+	// to catch it. The service token must have unlimited uses (num_uses 0
+	// or absent); tokens from auth backends that do not expose num_uses
+	// are tolerated.
+	switch uses := lookup.Data["num_uses"].(type) {
+	case float64:
+		if uses > 0 {
+			return nil, fmt.Errorf("vault token has a finite use count (%d); the service token must have unlimited uses", int(uses))
+		}
+	case json.Number:
+		if n, err := uses.Int64(); err == nil && n > 0 {
+			return nil, fmt.Errorf("vault token has a finite use count (%d); the service token must have unlimited uses", int(n))
+		}
+	}
+
 	renewable, hasRenewable := lookup.Data["renewable"].(bool)
+	ttlSeconds, ttlErr := tokenTTLSeconds(lookup)
 	if !hasRenewable {
 		// The root token's lookup legitimately omits renewable (it is
 		// non-renewable with no TTL). But a lookup with neither renewable
-		// nor ttl is malformed: accepting it would silently disable renewal
-		// on a possibly-finite token.
-		if _, hasTTL := lookup.Data["ttl"]; !hasTTL {
-			return nil, fmt.Errorf("vault returned a token lookup without renewable or ttl information")
+		// nor a valid ttl is malformed: accepting it would silently disable
+		// renewal on a possibly-finite token.
+		if ttlErr != nil {
+			return nil, fmt.Errorf("vault returned a token lookup without renewable or ttl information: %w", ttlErr)
 		}
 		renewable = false
 	}
@@ -94,9 +112,14 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 		// A finite non-renewable token would silently expire under the
 		// running server (non-renewable does not mean non-expiring), with
 		// no lease monitoring to catch it. Reject it at boot; the Vault dev
-		// root token (non-renewable, no TTL) is unaffected.
-		if ttl := leaseDuration(lookup); ttl > 0 {
-			return nil, fmt.Errorf("vault token is not renewable and expires in %ds; use a renewable token or a non-expiring one", ttl)
+		// root token (non-renewable, no TTL) is unaffected. A malformed or
+		// negative ttl (which leaseDuration would silently turn into "no
+		// expiry") is rejected too.
+		if ttlErr != nil {
+			return nil, fmt.Errorf("vault returned a malformed token ttl: %w", ttlErr)
+		}
+		if ttlSeconds > 0 {
+			return nil, fmt.Errorf("vault token is not renewable and expires in %ds; use a renewable token or a non-expiring one", ttlSeconds)
 		}
 	}
 	if err := v.verifyCapabilities(bootCtx, c); err != nil {
@@ -116,8 +139,14 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 		}
 		// ParseSecret returns (nil, nil) for an empty body; accepting that
 		// here would pass the renewal check without proving a valid lease.
+		// A zero lease duration is equally unproven: the watcher would seed
+		// with zero and fall back to its default timing, which can miss a
+		// short-lived lease.
 		if renewed == nil || renewed.Auth == nil {
 			return nil, fmt.Errorf("vault returned an empty token renewal response")
+		}
+		if renewed.Auth.LeaseDuration <= 0 {
+			return nil, fmt.Errorf("vault returned a token renewal response without a lease duration")
 		}
 		lookup.Data["ttl"] = float64(renewed.Auth.LeaseDuration)
 	}
@@ -512,15 +541,18 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 			// renewal takes place and includes metadata about the renewal.
 			// Stay on the same watcher: it keeps running and renewing.
 			case info := <-watcher.RenewCh():
-				// A malformed renewal confirmation (nil secret/auth) is
-				// metadata damage, not proof the token died — RenewCh only
-				// fires on a successful renewal, and a malformed response
-				// shape can be transient. log.Fatalf here would skip the
+				// A malformed renewal confirmation (nil secret/auth, or a
+				// confirmation without a lease duration) is metadata damage,
+				// not proof the token died — RenewCh only fires on a
+				// successful renewal, and a malformed response shape can be
+				// transient. A zero duration would make the recreated
+				// watcher fall back to its default schedule, so it is
+				// treated as malformed too. log.Fatalf here would skip the
 				// graceful shutdown and sever in-flight one-time reads, so
 				// instead stop the watcher and revalidate: transient
 				// failures retry, and a token that really is dead still
 				// exits via the terminal classifiers.
-				if info.Secret == nil || info.Secret.Auth == nil {
+				if info.Secret == nil || info.Secret.Auth == nil || info.Secret.Auth.LeaseDuration <= 0 {
 					log.Printf("vault returned an empty renewal confirmation; stopping the watcher and revalidating")
 					watcher.Stop()
 					watcherDone = true
@@ -603,9 +635,11 @@ func (v vault) revalidateToken(ctx context.Context, c *api.Client, retryDelay ti
 			}
 			continue
 		}
-		if renewed == nil || renewed.Auth == nil {
-			// Malformed success (empty body): same fail-loud treatment as
-			// an empty lookup response.
+		if renewed == nil || renewed.Auth == nil || renewed.Auth.LeaseDuration <= 0 {
+			// Malformed success (empty body, or a body without a lease
+			// duration — the recreated watcher would fall back to its
+			// default schedule): same fail-loud treatment as an empty
+			// lookup response.
 			log.Fatalf("vault returned an empty token renewal response during renewal; exiting so the supervisor can restart")
 		}
 		fresh.Data["ttl"] = float64(renewed.Auth.LeaseDuration)
@@ -613,8 +647,42 @@ func (v vault) revalidateToken(ctx context.Context, c *api.Client, retryDelay ti
 	}
 }
 
+// tokenTTLSeconds extracts the token's ttl in seconds from a LookupSelf
+// result, rejecting malformed representations: leaseDuration would silently
+// turn a wrong-typed or negative ttl into a zero, which the boot validation
+// treats as "no expiry" — exactly the degraded state the guard exists to
+// prevent.
+func tokenTTLSeconds(lookup *api.Secret) (int, error) {
+	if lookup == nil {
+		return 0, fmt.Errorf("no lookup response")
+	}
+	raw, ok := lookup.Data["ttl"]
+	if !ok {
+		return 0, fmt.Errorf("no ttl information")
+	}
+	switch ttl := raw.(type) {
+	case float64:
+		if ttl < 0 {
+			return 0, fmt.Errorf("negative ttl value %v", ttl)
+		}
+		return int(ttl), nil
+	case json.Number:
+		n, err := ttl.Int64()
+		if err != nil {
+			return 0, fmt.Errorf("malformed ttl value %q", ttl.String())
+		}
+		if n < 0 {
+			return 0, fmt.Errorf("negative ttl value %q", ttl.String())
+		}
+		return int(n), nil
+	}
+	return 0, fmt.Errorf("malformed ttl type %T", raw)
+}
+
 // leaseDuration extracts the token's lease duration in seconds from a
 // LookupSelf result, tolerating both float64 and json.Number representations.
+// Only used after boot validation has accepted the lookup, so a malformed
+// representation simply yields zero.
 func leaseDuration(lookup *api.Secret) int {
 	if lookup == nil {
 		return 0
