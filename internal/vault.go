@@ -218,9 +218,9 @@ func (v vault) boundedSelfTest(ctx context.Context) error {
 // hasAnyCapability reports whether the capability list contains any of the
 // given capabilities (Vault reports "root" for root tokens).
 func hasAnyCapability(caps []string, wanted ...string) bool {
-	for _, cap := range caps {
+	for _, capability := range caps {
 		for _, w := range wanted {
-			if cap == w {
+			if capability == w {
 				return true
 			}
 		}
@@ -565,7 +565,10 @@ func (v vault) revalidateToken(ctx context.Context, c *api.Client, retryDelay ti
 		// revocation mid-flight would otherwise cycle through watchers
 		// without ever failing loudly. A successful renewal also refreshes
 		// the lease, which seeds the next watcher.
-		renewCtx, cancel := context.WithTimeout(ctx, retryDelay)
+		// Bound the re-proof renewal with bootValidationTimeout, not the
+		// backoff delay: retuning the backoff must not silently change the
+		// per-call renewal deadline.
+		renewCtx, cancel := context.WithTimeout(ctx, bootValidationTimeout)
 		renewed, rerr := c.Auth().Token().RenewSelfWithContext(renewCtx, 0)
 		cancel()
 		if rerr != nil {
