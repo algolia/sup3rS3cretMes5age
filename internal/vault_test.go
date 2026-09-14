@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -90,17 +91,18 @@ func TestStoreWithInvalidAddress(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// TestIsTerminalTokenError pins the classification used after a lifetime
-// watcher's lease ends: auth rejections (403/404) mean the token can never
-// renew again and must exit the process, while transport-level errors must
-// keep the renewal loop retrying.
+// TestIsTerminalTokenError pins the classification used for LookupSelf
+// revalidation and capability probes: auth rejections (403/404) mean the
+// token is dead and must exit the process, while every other status —
+// including a bare 400, which Vault answers for conditions unrelated to
+// token death — must keep retrying. Renewal errors have their own classifier.
 func TestIsTerminalTokenError(t *testing.T) {
 	tests := []struct {
 		name     string
 		err      error
 		terminal bool
 	}{
-		{"400 terminal renewal condition (max TTL)", &api.ResponseError{StatusCode: 400}, true},
+		{"400 not terminal for lookups", &api.ResponseError{StatusCode: 400}, false},
 		{"403 auth rejection", &api.ResponseError{StatusCode: 403}, true},
 		{"404 unknown token", &api.ResponseError{StatusCode: 404}, true},
 		{"503 vault restarting", &api.ResponseError{StatusCode: 503}, false},
@@ -111,6 +113,33 @@ func TestIsTerminalTokenError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.terminal, isTerminalTokenError(tt.err))
+		})
+	}
+}
+
+// TestIsTerminalRenewalError pins the renewal-specific classification: 403
+// and 404 are always terminal; a 400 is terminal only when Vault's response
+// body says the lease can no longer be renewed (max TTL / non-renewable) —
+// any other 400 body must be retried, not treated as a dead token.
+func TestIsTerminalRenewalError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		terminal bool
+	}{
+		{"400 lease not renewable (max TTL)", &api.ResponseError{StatusCode: 400, Errors: []string{"lease is not renewable"}}, true},
+		{"400 token not renewable", &api.ResponseError{StatusCode: 400, Errors: []string{"token is not renewable"}}, true},
+		{"400 unrelated body", &api.ResponseError{StatusCode: 400, Errors: []string{"invalid request"}}, false},
+		{"400 empty body", &api.ResponseError{StatusCode: 400}, false},
+		{"403 auth rejection", &api.ResponseError{StatusCode: 403}, true},
+		{"404 unknown token", &api.ResponseError{StatusCode: 404}, true},
+		{"503 vault restarting", &api.ResponseError{StatusCode: 503}, false},
+		{"transport error", errors.New("connection refused"), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.terminal, isTerminalRenewalError(tt.err))
 		})
 	}
 }
@@ -145,7 +174,10 @@ func TestStoreReturnsWriteError(t *testing.T) {
 
 // TestRedactTokenFromError pins the error sanitization applied before store errors
 // reach the handlers (which log them): Vault transport errors embed the
-// request URL, whose path contains the one-time token.
+// request URL, whose path contains the one-time token — in raw and
+// percent-encoded form. The wrapper must also preserve the error identity
+// (errors.As reaches the underlying *api.ResponseError) so the status code
+// keeps feeding the terminal-error classification.
 func TestRedactTokenFromError(t *testing.T) {
 	err := errors.New(`Get "http://vault:8200/v1/cubbyhole/hvs.SECRET123": dial tcp: connection refused`)
 
@@ -155,6 +187,54 @@ func TestRedactTokenFromError(t *testing.T) {
 	assert.NotContains(t, redacted.Error(), "hvs.SECRET123")
 	assert.Contains(t, redacted.Error(), "REDACTED")
 	assert.Contains(t, redacted.Error(), "connection refused")
+
+	// Percent-encoded variant (transport errors may quote the escaped URL).
+	escaped := redactTokenFromError(
+		errors.New(`Get "http://vault:8200/v1/cubbyhole/hvs.SECRET%2B123": dial tcp: connection refused`),
+		"hvs.SECRET+123")
+	assert.NotContains(t, escaped.Error(), "hvs.SECRET+123")
+	assert.NotContains(t, escaped.Error(), "hvs.SECRET%2B123")
+
+	// Error identity survives the wrapping.
+	var respErr *api.ResponseError
+	wrapped := redactTokenFromError(
+		fmt.Errorf("store failed: %w", &api.ResponseError{StatusCode: 503, Errors: []string{"vault sealed"}}),
+		"hvs.X")
+	assert.ErrorAs(t, wrapped, &respErr)
+	assert.Equal(t, 503, respErr.StatusCode)
+}
+
+// TestRevalidateToken pins the revalidation cycle the renewal loop relies
+// on after a lease end or a malformed renewal confirmation (both paths now
+// route through it instead of exiting on a malformed confirmation): against
+// a live Vault it must produce a fresh lookup carrying a proven renewal TTL,
+// and a cancelled context must stop it without exiting.
+func TestRevalidateToken(t *testing.T) {
+	ln, c := createTestVault(t)
+	defer func() { _ = ln.Close() }()
+
+	secret, err := c.Auth().Token().Create(&api.TokenCreateRequest{
+		Renewable: boolPtr(true),
+		TTL:       "1h",
+	})
+	if !assert.NoError(t, err) {
+		return
+	}
+	v := vault{address: c.Address(), prefix: "secret/test/", token: secret.Auth.ClientToken}
+	renewableClient := c
+	renewableClient.SetToken(secret.Auth.ClientToken)
+
+	fresh, ok := v.revalidateToken(t.Context(), renewableClient, 100*time.Millisecond)
+	assert.True(t, ok, "revalidation against a live Vault must succeed")
+	if assert.NotNil(t, fresh) {
+		assert.Greater(t, leaseDuration(fresh), 0, "the fresh lookup must carry the proven renewal's TTL")
+	}
+
+	// A cancelled context stops the cycle gracefully (no Fatalf).
+	stoppedCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, ok = v.revalidateToken(stoppedCtx, renewableClient, 100*time.Millisecond)
+	assert.False(t, ok, "a cancelled context must stop revalidation without exiting")
 }
 
 // TestNewVaultFailsWhenCapabilitiesMissing pins the boot capability check:
