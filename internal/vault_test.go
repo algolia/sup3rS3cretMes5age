@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -266,6 +267,68 @@ func TestVaultHTTPTimeoutBoundsHangingRequests(t *testing.T) {
 
 	assert.Error(t, err, "a request to a hanging Vault must fail, not block forever")
 	assert.Less(t, elapsed, 10*time.Second, "the client timeout must bound the request")
+}
+
+// TestTokenTTLSeconds pins the boot ttl validation: a wrong-typed, missing
+// or negative ttl must be rejected, not silently turned into "no expiry" —
+// leaseDuration alone would return zero for all of them.
+func TestTokenTTLSeconds(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    map[string]any
+		want    int
+		wantErr bool
+	}{
+		{"float64 ttl", map[string]any{"ttl": float64(60)}, 60, false},
+		{"json.Number ttl", map[string]any{"ttl": json.Number("60")}, 60, false},
+		{"zero ttl is valid (no expiry)", map[string]any{"ttl": float64(0)}, 0, false},
+		{"negative float64 ttl", map[string]any{"ttl": float64(-5)}, 0, true},
+		{"negative json.Number ttl", map[string]any{"ttl": json.Number("-5")}, 0, true},
+		{"string ttl", map[string]any{"ttl": "60s"}, 0, true},
+		{"non-numeric json.Number ttl", map[string]any{"ttl": json.Number("abc")}, 0, true},
+		{"missing ttl", map[string]any{}, 0, true},
+		{"nil lookup", nil, 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var lookup *api.Secret
+			if tt.data != nil {
+				lookup = &api.Secret{Data: tt.data}
+			}
+			got, err := tokenTTLSeconds(lookup)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+// TestNewVaultRejectsFiniteUseToken pins the num_uses boot validation: a
+// token with a finite use count is consumed by the boot probes themselves,
+// then lets the server run until requests start failing — it must be
+// rejected at boot instead. The service token must have unlimited uses.
+func TestNewVaultRejectsFiniteUseToken(t *testing.T) {
+	ln, c := createTestVault(t)
+	defer func() { _ = ln.Close() }()
+
+	uses := 5
+	secret, err := c.Auth().Token().Create(&api.TokenCreateRequest{
+		NumUses:   uses,
+		Renewable: boolPtr(true),
+	})
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	_, err = NewVault(context.Background(), c.Address(), "secret/test/", secret.Auth.ClientToken)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "finite use count",
+		"a finite-use token must be rejected at boot, before the probes consume its uses")
 }
 
 // TestNewVaultFailsWhenCapabilitiesMissing pins the boot capability check:
