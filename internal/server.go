@@ -236,8 +236,8 @@ func redactTokens(rawURI string) string {
 	}
 	changed := false
 	for name := range q {
-		if strings.Contains(strings.ToLower(name), "token") {
-			q.Set(name, "REDACTED")
+		if isTokenParamName(name) {
+			q.Set(name, redactedPlaceholder)
 			changed = true
 		}
 	}
