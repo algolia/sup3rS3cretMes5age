@@ -80,48 +80,9 @@ func NewVault(ctx context.Context, address string, prefix string, token string) 
 		return nil, fmt.Errorf("vault returned an empty token lookup response")
 	}
 
-	// A token with a finite use count is a trap: the boot probes below
-	// (lookup, self-test, renewal proof) consume uses, and once exhausted
-	// the server starts failing on every request with no lease monitoring
-	// to catch it. The service token must have unlimited uses (num_uses 0
-	// or absent); tokens from auth backends that do not expose num_uses
-	// are tolerated.
-	switch uses := lookup.Data["num_uses"].(type) {
-	case float64:
-		if uses > 0 {
-			return nil, fmt.Errorf("vault token has a finite use count (%d); the service token must have unlimited uses", int(uses))
-		}
-	case json.Number:
-		if n, err := uses.Int64(); err == nil && n > 0 {
-			return nil, fmt.Errorf("vault token has a finite use count (%d); the service token must have unlimited uses", int(n))
-		}
-	}
-
-	renewable, hasRenewable := lookup.Data["renewable"].(bool)
-	ttlSeconds, ttlErr := tokenTTLSeconds(lookup)
-	if !hasRenewable {
-		// The root token's lookup legitimately omits renewable (it is
-		// non-renewable with no TTL). But a lookup with neither renewable
-		// nor a valid ttl is malformed: accepting it would silently disable
-		// renewal on a possibly-finite token.
-		if ttlErr != nil {
-			return nil, fmt.Errorf("vault returned a token lookup without renewable or ttl information: %w", ttlErr)
-		}
-		renewable = false
-	}
-	if !renewable {
-		// A finite non-renewable token would silently expire under the
-		// running server (non-renewable does not mean non-expiring), with
-		// no lease monitoring to catch it. Reject it at boot; the Vault dev
-		// root token (non-renewable, no TTL) is unaffected. A malformed or
-		// negative ttl (which leaseDuration would silently turn into "no
-		// expiry") is rejected too.
-		if ttlErr != nil {
-			return nil, fmt.Errorf("vault returned a malformed token ttl: %w", ttlErr)
-		}
-		if ttlSeconds > 0 {
-			return nil, fmt.Errorf("vault token is not renewable and expires in %ds; use a renewable token or a non-expiring one", ttlSeconds)
-		}
+	renewable, _, err := validateBootLookup(lookup)
+	if err != nil {
+		return nil, err
 	}
 	if err := v.verifyCapabilities(bootCtx, c); err != nil {
 		return nil, err
@@ -646,6 +607,74 @@ func (v vault) revalidateToken(ctx context.Context, c *api.Client, retryDelay ti
 		fresh.Data["ttl"] = float64(renewed.Auth.LeaseDuration)
 		return fresh, true
 	}
+}
+
+// validateBootLookup checks a LookupSelf response before the service
+// starts. It returns whether the token is renewable and its ttl in
+// seconds, and rejects:
+//   - a renewable field present with a wrong type (absent is the legitimate
+//     root-token case — non-renewable with no TTL; a type assertion alone
+//     cannot tell the two apart and would silently accept the malformed one);
+//   - a malformed, negative or non-integral ttl (leaseDuration would
+//     silently turn any of them into zero, which reads as "no expiry" —
+//     exactly the degraded state the guard exists to prevent). A finite
+//     non-renewable token would silently expire under the running server
+//     with no lease monitoring to catch it, so it is rejected too;
+//   - a finite use count (num_uses > 0): the boot probes consume uses, and
+//     once exhausted the server starts failing on every request — the
+//     service token must have unlimited uses. A wrong-typed or malformed
+//     num_uses is rejected as well; only an absent field is tolerated
+//     (auth backends that do not expose it).
+func validateBootLookup(lookup *api.Secret) (renewable bool, ttlSeconds int, err error) {
+	rawRenewable, hasRenewable := lookup.Data["renewable"]
+	renewable = false
+	if hasRenewable {
+		r, isBool := rawRenewable.(bool)
+		if !isBool {
+			return false, 0, fmt.Errorf("vault returned a malformed renewable field (%T)", rawRenewable)
+		}
+		renewable = r
+	}
+
+	ttlSeconds, ttlErr := tokenTTLSeconds(lookup)
+	if ttlErr != nil {
+		if !hasRenewable {
+			// Neither renewable nor a valid ttl: a lookup like this cannot
+			// be classified, and accepting it would silently disable
+			// renewal on a possibly-finite token.
+			return false, 0, fmt.Errorf("vault returned a token lookup without renewable or ttl information: %w", ttlErr)
+		}
+		// A renewable token with a malformed ttl: the lookup itself is
+		// malformed, reject rather than guess.
+		return false, 0, fmt.Errorf("vault returned a malformed token ttl: %w", ttlErr)
+	}
+	if !renewable && ttlSeconds > 0 {
+		return false, 0, fmt.Errorf("vault token is not renewable and expires in %ds; use a renewable token or a non-expiring one", ttlSeconds)
+	}
+
+	switch uses := lookup.Data["num_uses"].(type) {
+	case float64:
+		if uses < 0 {
+			return false, 0, fmt.Errorf("vault returned a malformed num_uses (%v)", uses)
+		}
+		if uses > 0 {
+			return false, 0, fmt.Errorf("vault token has a finite use count (%d); the service token must have unlimited uses", int(uses))
+		}
+	case json.Number:
+		n, perr := uses.Int64()
+		if perr != nil || n < 0 {
+			return false, 0, fmt.Errorf("vault returned a malformed num_uses (%q)", uses.String())
+		}
+		if n > 0 {
+			return false, 0, fmt.Errorf("vault token has a finite use count (%d); the service token must have unlimited uses", int(n))
+		}
+	default:
+		if rawUses, present := lookup.Data["num_uses"]; present {
+			return false, 0, fmt.Errorf("vault returned a malformed num_uses (%T); the service token must have unlimited uses", rawUses)
+		}
+	}
+
+	return renewable, ttlSeconds, nil
 }
 
 // tokenTTLSeconds extracts the token's ttl in seconds from a LookupSelf
