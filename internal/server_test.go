@@ -279,24 +279,34 @@ func TestServerRateLimiting(t *testing.T) {
 	assert.Greater(t, rateLimitCount, 0, "Rate limiter should have triggered")
 }
 
+// TestParseTrustedProxies pins the parsed NETWORKS, not just their count: a
+// regression returning wrong networks with the right count would silently
+// change which peers count as trusted proxies — and wrongly trusting a peer
+// lets it forge X-Forwarded-For. Bare IPs must become single-host networks
+// (IPv4 /32, IPv6 /128).
 func TestParseTrustedProxies(t *testing.T) {
 	tests := []struct {
 		name     string
 		raw      string
-		expected int
+		expected []string
 	}{
-		{"empty", "", 0},
-		{"whitespace only", "   ", 0},
-		{"single bare IPv4", "10.0.0.1", 1},
-		{"single CIDR", "10.0.0.0/8", 1},
-		{"bare IPv6", "fd00::1", 1},
-		{"multiple entries", "10.0.0.1, 192.168.0.0/16, fd00::/8", 3},
+		{"empty", "", []string{}},
+		{"whitespace only", "   ", []string{}},
+		{"single bare IPv4 becomes /32", "10.0.0.1", []string{"10.0.0.1/32"}},
+		{"single CIDR", "10.0.0.0/8", []string{"10.0.0.0/8"}},
+		{"bare IPv6 becomes /128", "fd00::1", []string{"fd00::1/128"}},
+		{"multiple entries", "10.0.0.1, 192.168.0.0/16, fd00::/8",
+			[]string{"10.0.0.1/32", "192.168.0.0/16", "fd00::/8"}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			networks := parseTrustedProxies(tt.raw)
-			assert.Len(t, networks, tt.expected)
+			got := make([]string, 0, len(networks))
+			for _, network := range networks {
+				got = append(got, network.String())
+			}
+			assert.Equal(t, tt.expected, got)
 		})
 	}
 }
