@@ -46,6 +46,13 @@ type vault struct {
 // the capability checks): they must never hang startup indefinitely.
 const bootValidationTimeout = 30 * time.Second
 
+// vaultHTTPTimeout bounds every request the Vault API client makes —
+// including the contextless Store/Get calls on the one-time-token clients:
+// a Vault that accepts connections but never answers must not block request
+// goroutines (or the boot self-test goroutine) until the process exits. It
+// is a var so tests can shrink it; treat it as a constant.
+var vaultHTTPTimeout = 30 * time.Second
+
 func NewVault(ctx context.Context, address string, prefix string, token string) (*vault, error) {
 	v := &vault{address: address, prefix: prefix, token: token}
 
@@ -197,8 +204,9 @@ var errSkippedCapabilityCheck = errors.New("capability check skipped")
 // boundedSelfTest runs the boot self-test raced against the boot context:
 // the underlying Vault calls in Store/Get are contextless, so without this
 // race a Vault that accepts connections but hangs on requests could still
-// block boot indefinitely. When ctx wins, NewVault fails boot and the
-// process exits — so the losing goroutine cannot outlive it.
+// block boot indefinitely. When ctx wins, NewVault fails boot; the losing
+// goroutine terminates on its own — every request the client makes is
+// bounded by the vaultHTTPTimeout.
 func (v vault) boundedSelfTest(ctx context.Context) error {
 	done := make(chan error, 1)
 	go func() { done <- v.selfTest() }()
@@ -329,6 +337,14 @@ func (v vault) newVaultClient() (*api.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Every request — including the contextless Store/Get calls — is
+	// bounded: the api client wraps each request in a context with this
+	// timeout (RawRequestWithContext → withConfiguredTimeout), so a Vault
+	// that accepts connections but never answers cannot hang request
+	// goroutines (or the boot self-test goroutine) until the process
+	// exits. The Vault default is 60s; align it with the boot bound.
+	c.SetClientTimeout(vaultHTTPTimeout)
 
 	if v.token != "" {
 		c.SetToken(v.token)

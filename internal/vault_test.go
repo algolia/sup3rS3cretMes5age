@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -235,6 +237,35 @@ func TestRevalidateToken(t *testing.T) {
 	cancel()
 	_, ok = v.revalidateToken(stoppedCtx, renewableClient, 100*time.Millisecond)
 	assert.False(t, ok, "a cancelled context must stop revalidation without exiting")
+}
+
+// TestVaultHTTPTimeoutBoundsHangingRequests pins the client-level HTTP
+// timeout: a Vault that accepts connections but never answers must not
+// block the contextless Store call until the process exits — the request
+// fails once the timeout elapses, so the boot self-test goroutine (and any
+// request goroutine) terminates on its own.
+func TestVaultHTTPTimeoutBoundsHangingRequests(t *testing.T) {
+	block := make(chan struct{})
+	// hanging.Close waits for outstanding handlers to return, so it must be
+	// registered BEFORE close(block): defers run LIFO, the channel closes
+	// first, then the server can shut down.
+	hanging := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-block // never answer until the test ends
+	}))
+	defer hanging.Close()
+	defer close(block)
+
+	old := vaultHTTPTimeout
+	vaultHTTPTimeout = 200 * time.Millisecond
+	defer func() { vaultHTTPTimeout = old }()
+
+	v := vault{address: hanging.URL, prefix: "secret/test/", token: "hvs.ABCDEFGHIJKLMNOPQRSTUVWX"}
+	start := time.Now()
+	_, err := v.Store("msg", "")
+	elapsed := time.Since(start)
+
+	assert.Error(t, err, "a request to a hanging Vault must fail, not block forever")
+	assert.Less(t, elapsed, 10*time.Second, "the client timeout must bound the request")
 }
 
 // TestNewVaultFailsWhenCapabilitiesMissing pins the boot capability check:
