@@ -333,6 +333,84 @@ func TestNewVaultRejectsFiniteUseToken(t *testing.T) {
 		"a finite-use token must be rejected at boot, before the probes consume its uses")
 }
 
+// TestValidateBootLookup pins the boot lookup validation: a renewable field
+// present with a wrong type must be rejected (a type assertion alone cannot
+// tell an omitted field — the legitimate root-token case — from a malformed
+// one), num_uses must be a valid non-negative integer when present (a
+// finite use count would be consumed by the boot probes themselves), and a
+// malformed, negative or non-integral ttl must not read as "no expiry".
+func TestValidateBootLookup(t *testing.T) {
+	tests := []struct {
+		name      string
+		data      map[string]any
+		renewable bool
+		ttl       int
+		wantErr   string
+	}{
+		{
+			name: "renewable token with ttl", data: map[string]any{"renewable": true, "ttl": float64(3600)},
+			renewable: true, ttl: 3600,
+		},
+		{
+			name: "root-token case: renewable omitted, ttl zero", data: map[string]any{"ttl": float64(0)},
+			renewable: false, ttl: 0,
+		},
+		{
+			name: "non-renewable with ttl is rejected", data: map[string]any{"renewable": false, "ttl": float64(60)},
+			wantErr: "not renewable and expires",
+		},
+		{
+			name: "renewable field with wrong type", data: map[string]any{"renewable": "false", "ttl": float64(0)},
+			wantErr: "malformed renewable field",
+		},
+		{
+			name: "string ttl reads as malformed, not no-expiry", data: map[string]any{"renewable": true, "ttl": "60s"},
+			wantErr: "malformed ttl",
+		},
+		{
+			name: "fractional float64 ttl truncates to no-expiry", data: map[string]any{"renewable": true, "ttl": float64(0.5)},
+			wantErr: "malformed ttl",
+		},
+		{
+			name: "out-of-range float64 ttl overflows", data: map[string]any{"renewable": true, "ttl": float64(1e20)},
+			wantErr: "malformed ttl",
+		},
+		{
+			name: "negative ttl", data: map[string]any{"renewable": true, "ttl": float64(-1)},
+			wantErr: "malformed ttl value -1",
+		},
+		{
+			name: "finite use count", data: map[string]any{"renewable": true, "ttl": float64(3600), "num_uses": float64(5)},
+			wantErr: "finite use count",
+		},
+		{
+			name: "num_uses with wrong type", data: map[string]any{"renewable": true, "ttl": float64(3600), "num_uses": "5"},
+			wantErr: "malformed num_uses",
+		},
+		{
+			name: "num_uses with malformed json.Number", data: map[string]any{"renewable": true, "ttl": float64(3600), "num_uses": json.Number("abc")},
+			wantErr: "malformed num_uses",
+		},
+		{
+			name: "num_uses absent is tolerated", data: map[string]any{"renewable": true, "ttl": float64(3600)},
+			renewable: true, ttl: 3600,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			renewable, ttl, err := validateBootLookup(&api.Secret{Data: tt.data})
+			if tt.wantErr != "" {
+				assert.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.renewable, renewable)
+			assert.Equal(t, tt.ttl, ttl)
+		})
+	}
+}
+
 // TestNewVaultFailsWhenCapabilitiesMissing pins the boot capability check:
 // LookupSelf only proves authentication; a token that can create one-time
 // tokens but cannot write the storage prefix must fail at boot (fail-loud)
