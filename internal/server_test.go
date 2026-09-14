@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	gommonlog "github.com/labstack/gommon/log"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/acme/autocert"
 )
@@ -438,14 +439,21 @@ func TestRateLimitSpoofedHeadersShareOneBucket(t *testing.T) {
 // path: Echo routes IdentifierExtractor errors to RateLimiterConfig's
 // ErrorHandler (not DenyHandler), whose default would answer 403 with the
 // raw error. An unusable client identifier must fail closed with the same
-// constant 429 response as an exhausted bucket.
+// constant 429 response as an exhausted bucket, AND the underlying error
+// must be logged — a systemic client-identification failure must not become
+// a silent wall of 429s with no diagnostic trace.
 func TestRateLimitExtractorErrorFailsClosedWith429(t *testing.T) {
+	var logBuf bytes.Buffer
 	cnf := conf{
 		HttpBindingAddress: ":8080",
 		VaultPrefix:        "cubbyhole/",
 	}
 	e := echo.New()
 	setupMiddlewares(e, cnf)
+	// echo.New() defaults the logger to ERROR, which would suppress the
+	// Warnf this test asserts on (production gets INFO via NewServer).
+	e.Logger.SetLevel(gommonlog.INFO)
+	e.Logger.SetOutput(&logBuf)
 	e.GET("/probe", func(c echo.Context) error {
 		return c.String(http.StatusOK, "ok")
 	})
@@ -456,6 +464,10 @@ func TestRateLimitExtractorErrorFailsClosedWith429(t *testing.T) {
 	e.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
+	assert.Equal(t, `{"error":"rate limit exceeded"}`+"\n", rec.Body.String(),
+		"the constant 429 body must not leak the underlying error")
+	assert.Contains(t, logBuf.String(), "rate-limit client identification failed",
+		"the extractor error must be logged, not swallowed")
 }
 
 // TestRateLimitAppendedXFFFieldIsHonored pins the multi-field handling: a
@@ -493,4 +505,61 @@ func TestRateLimitAppendedXFFFieldIsHonored(t *testing.T) {
 
 	assert.True(t, saw429,
 		"appended real-client field must dominate: all requests share one bucket (fresh attacker field must not rotate buckets)")
+}
+
+// TestAccessLogRemoteIPMatchesRateLimitIdentity pins the access-log
+// remote_ip derivation: it must come from the same trustedClientIP logic as
+// the rate limiter, not from v.RemoteIP (echo fills that via c.RealIP(),
+// which honors X-Forwarded-For unconditionally). Otherwise an attacker
+// rotating the header pollutes the forensic log with arbitrary IPs that
+// disagree with the rate-limit identity actually enforced.
+func TestAccessLogRemoteIPMatchesRateLimitIdentity(t *testing.T) {
+	tests := []struct {
+		name         string
+		trustedProxy string
+		remoteAddr   string
+		xff          string
+		wantIP       string
+	}{
+		{
+			name:       "no trusted proxy: spoofed header ignored, peer logged",
+			remoteAddr: "203.0.113.7:55555",
+			xff:        "1.2.3.4",
+			wantIP:     "203.0.113.7",
+		},
+		{
+			name:         "trusted proxy: XFF client logged",
+			trustedProxy: "10.0.0.0/8",
+			remoteAddr:   "10.0.0.1:55555",
+			xff:          "203.0.113.7",
+			wantIP:       "203.0.113.7",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var logBuf bytes.Buffer
+			cnf := conf{
+				HttpBindingAddress: ":8080",
+				VaultPrefix:        "cubbyhole/",
+				TrustedProxies:     parseTrustedProxies(tt.trustedProxy),
+			}
+			e := echo.New()
+			setupMiddlewares(e, cnf)
+			e.Logger.SetOutput(&logBuf)
+			e.GET("/probe", func(c echo.Context) error {
+				return c.String(http.StatusOK, "ok")
+			})
+
+			req := httptest.NewRequest(http.MethodGet, "/probe", nil)
+			req.RemoteAddr = tt.remoteAddr
+			req.Header.Set(echo.HeaderXForwardedFor, tt.xff)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Contains(t, logBuf.String(), `"remote_ip":"`+tt.wantIP+`"`,
+				"access log remote_ip must match the rate-limit identity")
+		})
+	}
 }
