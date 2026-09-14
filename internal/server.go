@@ -16,6 +16,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/gommon/log"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/crypto/acme/autocert"
 )
@@ -36,6 +37,11 @@ type Server struct {
 func NewServer(cnf conf, handlers *SecretHandlers) *Server {
 	e := echo.New()
 	e.HideBanner = true
+	// echo.New() defaults the logger level to ERROR, which silences Warnf
+	// (and Infof) app-wide — rate-limit identification warnings and startup
+	// messages would never be emitted. INFO keeps warnings and notices
+	// visible while still dropping DEBUG chatter.
+	e.Logger.SetLevel(log.INFO)
 
 	// Configure Auto TLS if enabled
 	if cnf.TLSAutoDomain != "" {
@@ -349,8 +355,12 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 		// Echo routes IdentifierExtractor errors here, not to DenyHandler;
 		// the default ErrorHandler would answer 403 with the raw error.
 		// An unusable client identifier must fail closed with the same
-		// constant 429 response as an exhausted bucket.
+		// constant 429 response as an exhausted bucket — and the underlying
+		// error must be logged: a systemic client-identification failure
+		// would otherwise turn every request into a silent 429 with no
+		// diagnostic trace at all.
 		ErrorHandler: func(ctx echo.Context, err error) error {
+			ctx.Logger().Warnf("rate-limit client identification failed: %v", err)
 			return ctx.JSON(http.StatusTooManyRequests, map[string]string{
 				"error": "rate limit exceeded",
 			})
@@ -362,7 +372,6 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 		Skipper: func(c echo.Context) bool {
 			return c.Path() == "/health"
 		},
-		LogRemoteIP:      true,
 		LogHost:          true,
 		LogMethod:        true,
 		LogURI:           true,
@@ -374,10 +383,23 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 		LogResponseSize:  true,
 		LogRequestID:     true,
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
+			// remote_ip is derived from the same trustedClientIP logic as the
+			// rate limiter, not from v.RemoteIP: echo populates that via
+			// c.RealIP(), which honors X-Forwarded-For unconditionally and
+			// would let an attacker rotate the logged IP at will (log
+			// forgery, and a logged IP that disagrees with the rate-limit
+			// identity for the same request). On an unparseable peer
+			// address, fall back to the raw socket address — still not
+			// attacker-chosen.
+			remoteIP, ipErr := trustedClientIP(c.Request().RemoteAddr,
+				strings.Join(c.Request().Header.Values(echo.HeaderXForwardedFor), ","), cnf.TrustedProxies)
+			if ipErr != nil {
+				remoteIP = c.Request().RemoteAddr
+			}
 			logEntry := map[string]any{
 				"time":          v.StartTime.UTC().Format(time.RFC3339Nano),
 				"id":            v.RequestID,
-				"remote_ip":     v.RemoteIP,
+				"remote_ip":     remoteIP,
 				"host":          v.Host,
 				"method":        v.Method,
 				"uri":           redactTokens(v.URI),
