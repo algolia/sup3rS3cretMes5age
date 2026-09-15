@@ -503,10 +503,9 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 			// renewal takes place and includes metadata about the renewal.
 			// Stay on the same watcher: it keeps running and renewing.
 			case info := <-watcher.RenewCh():
-				// A malformed renewal confirmation (nil secret/auth, or a
-				// confirmation without a lease duration) is metadata damage,
-				// not proof the token died — RenewCh only fires on a
-				// successful renewal, and a malformed response shape can be
+				// A malformed renewal confirmation is metadata damage, not
+				// proof the token died — RenewCh only fires on a successful
+				// renewal, and a malformed response shape can be
 				// transient. A zero duration would make the recreated
 				// watcher fall back to its default schedule, so it is
 				// treated as malformed too. log.Fatalf here would skip the
@@ -514,7 +513,7 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 				// instead stop the watcher and revalidate: transient
 				// failures retry, and a token that really is dead still
 				// exits via the terminal classifiers.
-				if info.Secret == nil || info.Secret.Auth == nil || info.Secret.Auth.LeaseDuration <= 0 {
+				if malformedRenewalConfirmation(info) {
 					log.Printf("vault returned an empty renewal confirmation; stopping the watcher and revalidating")
 					watcher.Stop()
 					watcherDone = true
@@ -529,6 +528,15 @@ func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret
 			}
 		}
 	}
+}
+
+// malformedRenewalConfirmation reports whether a RenewCh output is too
+// damaged to trust as a renewal confirmation: a nil output (a closed
+// channel yields a nil pointer), a nil secret/auth, or a confirmation
+// without a lease duration (the recreated watcher would fall back to its
+// default schedule).
+func malformedRenewalConfirmation(info *api.RenewOutput) bool {
+	return info == nil || info.Secret == nil || info.Secret.Auth == nil || info.Secret.Auth.LeaseDuration <= 0
 }
 
 // revalidateToken re-looks-up the token and re-proves renew-self, retrying
@@ -704,8 +712,11 @@ func tokenTTLSeconds(lookup *api.Secret) (int, error) {
 		if err != nil {
 			return 0, fmt.Errorf("malformed ttl value %q", ttl.String())
 		}
-		if n < 0 {
-			return 0, fmt.Errorf("negative ttl value %q", ttl.String())
+		// Same bound as the float64 path: a value too large for int can
+		// wrap on 32-bit builds (turning a finite lease into "no expiry")
+		// and overflow the watcher's duration arithmetic on any build.
+		if n < 0 || n > math.MaxInt32 {
+			return 0, fmt.Errorf("malformed ttl value %q", ttl.String())
 		}
 		return int(n), nil
 	}

@@ -49,7 +49,7 @@ config:
 # against a slow-but-starting Vault. The startup probe delays liveness
 # checks until the application answers /health.
 startupProbe:
-  # It it the same that .Values.config.server.env. "SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS"
+  # Same port that .Values.config.server.env "SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS" binds
   port: "80"
   # Path of probe (see livenessProbe: /health, not /msg)
   path: "/health"

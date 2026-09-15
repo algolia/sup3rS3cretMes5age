@@ -286,6 +286,7 @@ func TestTokenTTLSeconds(t *testing.T) {
 		{"negative json.Number ttl", map[string]any{"ttl": json.Number("-5")}, 0, true},
 		{"fractional float64 ttl truncates to no-expiry", map[string]any{"ttl": float64(0.5)}, 0, true},
 		{"out-of-range float64 ttl overflows", map[string]any{"ttl": float64(1e20)}, 0, true},
+		{"out-of-range json.Number ttl overflows", map[string]any{"ttl": json.Number("99999999999")}, 0, true},
 		{"string ttl", map[string]any{"ttl": "60s"}, 0, true},
 		{"non-numeric json.Number ttl", map[string]any{"ttl": json.Number("abc")}, 0, true},
 		{"missing ttl", map[string]any{}, 0, true},
@@ -409,6 +410,21 @@ func TestValidateBootLookup(t *testing.T) {
 			assert.Equal(t, tt.ttl, ttl)
 		})
 	}
+}
+
+// TestMalformedRenewalConfirmation pins the malformed-confirmation guard:
+// RenewCh carries a pointer, so a closed channel or a malformed Vault
+// response can deliver a nil output, nil secret or nil auth — each must be
+// classified as malformed (and routed to revalidation) instead of
+// dereferenced, and a zero lease duration counts as malformed too.
+func TestMalformedRenewalConfirmation(t *testing.T) {
+	assert.True(t, malformedRenewalConfirmation(nil), "nil output (closed channel) must be malformed")
+	assert.True(t, malformedRenewalConfirmation(&api.RenewOutput{}), "nil secret must be malformed")
+	assert.True(t, malformedRenewalConfirmation(&api.RenewOutput{Secret: &api.Secret{}}), "nil auth must be malformed")
+	assert.True(t, malformedRenewalConfirmation(&api.RenewOutput{Secret: &api.Secret{
+		Auth: &api.SecretAuth{LeaseDuration: 0}}}), "zero lease duration must be malformed")
+	assert.False(t, malformedRenewalConfirmation(&api.RenewOutput{Secret: &api.Secret{
+		Auth: &api.SecretAuth{LeaseDuration: 3600}}}), "a confirmed renewal with a duration is well-formed")
 }
 
 // TestNewVaultFailsWhenCapabilitiesMissing pins the boot capability check:
