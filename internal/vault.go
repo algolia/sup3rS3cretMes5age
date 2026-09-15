@@ -15,6 +15,18 @@ import (
 	"github.com/hashicorp/vault/api"
 )
 
+// bootValidationTimeout bounds the boot-time Vault requests (LookupSelf and
+// the capability checks): they must never hang startup indefinitely.
+const bootValidationTimeout = 30 * time.Second
+
+// vaultHTTPTimeout is the default per-request timeout for the Vault API
+// client — including the contextless Store/Get calls on the one-time-token
+// clients: a Vault that accepts connections but never answers must not
+// block request goroutines (or the boot self-test goroutine) until the
+// process exits. Tests inject a smaller timeout through the vault struct's
+// httpTimeout field instead of touching the constant.
+const vaultHTTPTimeout = 30 * time.Second
+
 // SecretMsgStorer defines the interface for storing and retrieving self-destructing messages.
 // Implementations must ensure messages are deleted after first retrieval (one-time access).
 type SecretMsgStorer interface {
@@ -33,6 +45,9 @@ type vault struct {
 	prefix string
 	// token is the Vault authentication token (read from VAULT_TOKEN if empty).
 	token string
+	// httpTimeout overrides the per-request Vault API timeout (tests inject
+	// a smaller value); zero means the vaultHTTPTimeout default.
+	httpTimeout time.Duration
 }
 
 // NewVault creates a new vault client, validates connectivity and the token
@@ -43,17 +58,6 @@ type vault struct {
 // service cannot store or retrieve secrets without a working Vault connection,
 // so failing loudly is preferable to serving 500s until the first request
 // hits the broken client.
-// bootValidationTimeout bounds the boot-time Vault requests (LookupSelf and
-// the capability checks): they must never hang startup indefinitely.
-const bootValidationTimeout = 30 * time.Second
-
-// vaultHTTPTimeout bounds every request the Vault API client makes —
-// including the contextless Store/Get calls on the one-time-token clients:
-// a Vault that accepts connections but never answers must not block request
-// goroutines (or the boot self-test goroutine) until the process exits. It
-// is a var so tests can shrink it; treat it as a constant.
-var vaultHTTPTimeout = 30 * time.Second
-
 func NewVault(ctx context.Context, address string, prefix string, token string) (*vault, error) {
 	v := &vault{address: address, prefix: prefix, token: token}
 
@@ -335,7 +339,11 @@ func (v vault) newVaultClient() (*api.Client, error) {
 	// that accepts connections but never answers cannot hang request
 	// goroutines (or the boot self-test goroutine) until the process
 	// exits. The Vault default is 60s; align it with the boot bound.
-	c.SetClientTimeout(vaultHTTPTimeout)
+	timeout := v.httpTimeout
+	if timeout == 0 {
+		timeout = vaultHTTPTimeout
+	}
+	c.SetClientTimeout(timeout)
 
 	if v.token != "" {
 		c.SetToken(v.token)
