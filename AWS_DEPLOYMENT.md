@@ -288,6 +288,19 @@ export TASK_EXECUTION_ROLE_ARN=$(aws iam get-role \
 Create task definition:
 
 ```bash
+# The application rate-limits per client IP. Behind the ALB, the ALB is the
+# connection peer, so its network must be marked trusted for the app to
+# identify clients from X-Forwarded-For instead of collapsing every client
+# into one shared rate-limit bucket (see README - SUPERSECRETMESSAGE_TRUSTED_PROXIES).
+# Scope the list to the ALB's subnets, NOT the whole VPC CIDR: every trusted
+# entry can dictate the rate-limit identity via X-Forwarded-For, so a broader
+# list would let any VPC-internal peer rotate buckets and forge the logged IP.
+export ALB_SUBNET_CIDRS=$(aws ec2 describe-subnets \
+    --subnet-ids $PUBLIC_SUBNET_1 $PUBLIC_SUBNET_2 \
+    --query 'Subnets[*].CidrBlock' --output text)
+```
+
+```bash
 cat > task-definition.json << EOF
 {
   "family": "sup3rs3cretmes5age",
@@ -360,6 +373,10 @@ cat > task-definition.json << EOF
         {
           "name": "SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS",
           "value": ":80"
+        },
+        {
+          "name": "SUPERSECRETMESSAGE_TRUSTED_PROXIES",
+          "value": "$ALB_SUBNET_CIDRS"
         }
       ],
       "portMappings": [
