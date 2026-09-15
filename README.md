@@ -22,7 +22,7 @@ Read more about the reasoning behind this project in the [relevant blog post](ht
 - **📎 File Upload Support**: Share files up to 50MB with base64 encoding
 - **🔐 Vault-Backed Security**: Uses HashiCorp Vault's cubbyhole for tamper-proof storage
 - **🎫 One-Time Tokens**: Vault tokens with exactly 2 uses (create + retrieve)
-- **🚦 Rate Limiting**: Built-in protection (5 requests/second, burst 10)
+- **🚦 Rate Limiting**: Built-in protection (10 requests/second, burst 20)
 - **🔒 TLS/HTTPS Support**: 
   - Automatic TLS via [Let's Encrypt](https://letsencrypt.org/)
   - Manual certificate configuration
@@ -87,6 +87,7 @@ The service will start with:
 # Start Vault dev server
 docker run -d --name vault-dev -p 8200:8200 \
   -e VAULT_DEV_ROOT_TOKEN_ID=supersecret \
+  -e VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200 \
   hashicorp/vault:latest
 
 # Build and run the application
@@ -188,7 +189,7 @@ See [configuration examples](#configuration-examples) below.
 - ✅ Use HTTPS/TLS in production
 - ✅ Use a production Vault server (not dev mode)
 - ✅ Rotate Vault tokens regularly
-- ✅ Enable rate limiting (built-in: 5 req/s, burst 10)
+- ✅ Enable rate limiting (built-in: 10 req/s, burst 20)
 - ✅ Monitor Vault audit logs
 - ✅ Use strong Vault policies
 - ✅ Keep dependencies updated

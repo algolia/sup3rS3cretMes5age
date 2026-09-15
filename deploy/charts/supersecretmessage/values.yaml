@@ -42,6 +42,28 @@ config:
     - name: SUPERSECRETMESSAGE_VAULT_PREFIX
       value: "cubbyhole/"
 
+# Used to define custom startupProbe settings. The application validates
+# its Vault connection at boot (up to 30s) before binding HTTP; without a
+# startupProbe the liveness probe (initial delay 5s, two failures ~10s
+# apart) would restart the container mid-validation, creating a boot loop
+# against a slow-but-starting Vault. The startup probe delays liveness
+# checks until the application answers /health.
+startupProbe:
+  # It it the same that .Values.config.server.env. "SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS"
+  port: "80"
+  # Path of probe (see livenessProbe: /health, not /msg)
+  path: "/health"
+  # When a probe fails, Kubernetes will try failureThreshold times before giving up
+  failureThreshold: 12
+  # Number of seconds after the container has started before probe initiates
+  initialDelaySeconds: 2
+  # How often (in seconds) to perform the probe
+  periodSeconds: 5
+  # Minimum consecutive successes for the probe to be considered successful after having failed
+  successThreshold: 1
+  # Number of seconds after which the probe times out.
+  timeoutSeconds: 5
+  scheme: "HTTP"
 # Used to define custom livenessProbe settings
 livenessProbe:
   # It it the same that .Values.config.server.env. "SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS"
