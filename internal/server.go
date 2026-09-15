@@ -324,7 +324,7 @@ func containsIP(networks []*net.IPNet, ip net.IP) bool {
 }
 
 // setupMiddlewares configures Echo's middleware stack with security, rate limiting, and logging.
-// It applies HTTPS redirect (if enabled), CORS policy, rate limiting (5 RPS), request logging,
+// It applies HTTPS redirect (if enabled), CORS policy, rate limiting (rateLimitRate RPS, burst rateLimitBurst), request logging,
 // security headers (CSP, XSS protection, HSTS), body size limits (50MB), and panic recovery.
 // Middleware is applied in order: pre-routing (HTTPS redirect), then request-level middleware.
 func setupMiddlewares(e *echo.Echo, cnf conf) {
