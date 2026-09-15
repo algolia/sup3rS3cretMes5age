@@ -256,11 +256,14 @@ func TestVaultHTTPTimeoutBoundsHangingRequests(t *testing.T) {
 	defer hanging.Close()
 	defer close(block)
 
-	old := vaultHTTPTimeout
-	vaultHTTPTimeout = 200 * time.Millisecond
-	defer func() { vaultHTTPTimeout = old }()
-
-	v := vault{address: hanging.URL, prefix: "secret/test/", token: "hvs.ABCDEFGHIJKLMNOPQRSTUVWX"}
+	// Inject a small timeout through the vault struct instead of mutating a
+	// package var: no global state, safe under parallel tests.
+	v := vault{
+		address:     hanging.URL,
+		prefix:      "secret/test/",
+		token:       "hvs.ABCDEFGHIJKLMNOPQRSTUVWX",
+		httpTimeout: 200 * time.Millisecond,
+	}
 	start := time.Now()
 	_, err := v.Store("msg", "")
 	elapsed := time.Since(start)
