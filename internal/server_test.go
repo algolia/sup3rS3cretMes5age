@@ -1,12 +1,17 @@
 package internal
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/labstack/echo/v4"
+	gommonlog "github.com/labstack/gommon/log"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/acme/autocert"
 )
@@ -109,6 +114,62 @@ func TestServerSecurityHeaders(t *testing.T) {
 	assert.Contains(t, rec.Header().Get("Content-Security-Policy"), "default-src 'self'")
 }
 
+// TestAccessLogRedactsTokens pins the access-log redaction: one-time Vault
+// tokens must never reach the logs — a logged token is a second copy of the
+// secret, readable before the first retrieval. Non-token query parameters
+// must survive for debugging context.
+func TestAccessLogRedactsTokens(t *testing.T) {
+	var logBuf bytes.Buffer
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+		AllowedOrigins:     []string{"*"},
+	}
+	handlers := NewSecretHandlers(&FakeSecretMsgStorer{})
+	server := NewServer(cnf, handlers)
+	server.echo.Logger.SetOutput(&logBuf)
+
+	token := "hvs.CABAAAAAAQAAAAAAAAAABBBBCCCCDDDDEEEE"
+	req := httptest.NewRequest(http.MethodGet,
+		"/secret?token="+token+"&lang=fr&filename=report.pdf&filetoken=hvs.SECOND", nil)
+	rec := httptest.NewRecorder()
+	server.handler().ServeHTTP(rec, req)
+
+	logged := logBuf.String()
+	assert.Contains(t, logged, "token=REDACTED", "token value must be redacted")
+	assert.Contains(t, logged, "filetoken=REDACTED", "filetoken value must be redacted")
+	assert.NotContains(t, logged, token, "the raw one-time token must never reach the logs")
+	assert.NotContains(t, logged, "hvs.SECOND", "the raw file token must never reach the logs")
+	assert.Contains(t, logged, "lang=fr", "non-token parameters must survive")
+	assert.Contains(t, logged, "filename=report.pdf", "non-token parameters must survive")
+}
+
+func TestRedactTokens(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"no query parameters stays untouched", "/msg", "/msg"},
+		{"non-token parameters stay untouched", "/msg?lang=fr&ttl=48h", "/msg?lang=fr&ttl=48h"},
+		{"token value redacted", "/secret?token=hvs.abc&lang=fr", "/secret?lang=fr&token=REDACTED"},
+		{"filetoken value redacted", "/getmsg?token=hvs.a&filetoken=hvs.b&filename=f.pdf",
+			"/getmsg?filename=f.pdf&filetoken=REDACTED&token=REDACTED"},
+		{"param name matching is case-insensitive", "/secret?Token=hvs.abc", "/secret?Token=REDACTED"},
+		// A control character makes url.Parse fail outright; the query must
+		// be dropped rather than logged unredacted (it carries a token here).
+		{"unparseable URI drops the query, path kept", "/msg?token=hvs.AAA\x00", "/msg"},
+		// u.Query() silently discards a pair whose value has an invalid %
+		// escape; the raw query must still not reach the log with a token.
+		{"malformed query value drops the query", "/msg?token=hvs.secret%ZZ", "/msg"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, redactTokens(tt.input))
+		})
+	}
+}
+
 func TestServerRedirect(t *testing.T) {
 	cnf := conf{
 		HttpBindingAddress: ":8080",
@@ -200,7 +261,8 @@ func TestServerRateLimiting(t *testing.T) {
 	successCount := 0
 	rateLimitCount := 0
 
-	for i := 0; i < 20; i++ {
+	// Enough rapid requests to exhaust the burst and outpace any refill.
+	for i := 0; i < rateLimitBurst+rateLimitRate; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		req.Header.Set("X-Real-IP", "192.168.1.1")
 		rec := httptest.NewRecorder()
@@ -216,4 +278,334 @@ func TestServerRateLimiting(t *testing.T) {
 
 	// Should have some rate limited requests
 	assert.Greater(t, rateLimitCount, 0, "Rate limiter should have triggered")
+}
+
+// TestParseTrustedProxies pins the parsed NETWORKS, not just their count: a
+// regression returning wrong networks with the right count would silently
+// change which peers count as trusted proxies — and wrongly trusting a peer
+// lets it forge X-Forwarded-For. Bare IPs must become single-host networks
+// (IPv4 /32, IPv6 /128).
+func TestParseTrustedProxies(t *testing.T) {
+	tests := []struct {
+		name     string
+		raw      string
+		expected []string
+	}{
+		{"empty", "", []string{}},
+		{"whitespace only", "   ", []string{}},
+		{"single bare IPv4 becomes /32", "10.0.0.1", []string{"10.0.0.1/32"}},
+		{"single CIDR", "10.0.0.0/8", []string{"10.0.0.0/8"}},
+		{"bare IPv6 becomes /128", "fd00::1", []string{"fd00::1/128"}},
+		{"multiple entries", "10.0.0.1, 192.168.0.0/16, fd00::/8",
+			[]string{"10.0.0.1/32", "192.168.0.0/16", "fd00::/8"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			networks := parseTrustedProxies(tt.raw)
+			got := make([]string, 0, len(networks))
+			for _, network := range networks {
+				got = append(got, network.String())
+			}
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+func TestTrustedClientIP(t *testing.T) {
+	proxy := parseTrustedProxies("10.0.0.0/8")
+	proxyV6 := parseTrustedProxies("fd00::1")
+
+	tests := []struct {
+		name       string
+		remoteAddr string
+		xff        string
+		trusted    []*net.IPNet
+		expected   string
+		expectErr  bool
+	}{
+		{
+			name:       "no trusted proxies: header ignored, connection peer used",
+			remoteAddr: "203.0.113.7:1234",
+			xff:        "1.2.3.4",
+			trusted:    nil,
+			expected:   "203.0.113.7",
+		},
+		{
+			name:       "untrusted peer: spoofed header ignored",
+			remoteAddr: "203.0.113.7:1234",
+			xff:        "1.2.3.4, 5.6.7.8",
+			trusted:    proxy,
+			expected:   "203.0.113.7",
+		},
+		{
+			name:       "trusted proxy: client taken from X-Forwarded-For",
+			remoteAddr: "10.0.0.1:1234",
+			xff:        "203.0.113.7",
+			trusted:    proxy,
+			expected:   "203.0.113.7",
+		},
+		{
+			name:       "trusted proxy: right-to-left walk skips trusted hops",
+			remoteAddr: "10.0.0.1:1234",
+			xff:        "203.0.113.7, 10.0.0.9",
+			trusted:    proxy,
+			expected:   "203.0.113.7",
+		},
+		{
+			name:       "trusted proxy, no header: falls back to peer",
+			remoteAddr: "10.0.0.1:1234",
+			xff:        "",
+			trusted:    proxy,
+			expected:   "10.0.0.1",
+		},
+		{
+			name:       "trusted proxy, malformed header: falls back to peer",
+			remoteAddr: "10.0.0.1:1234",
+			xff:        "not-an-ip",
+			trusted:    proxy,
+			expected:   "10.0.0.1",
+		},
+		{
+			name:       "all entries trusted: connection peer used, not an attacker-chosen entry",
+			remoteAddr: "10.0.0.1:1234",
+			xff:        "10.0.0.2, 10.0.0.3",
+			trusted:    proxy,
+			expected:   "10.0.0.1",
+		},
+		{
+			name:       "malformed entry after trusted hop: connection peer used, not the parsed trusted hop",
+			remoteAddr: "10.0.0.1:1234",
+			xff:        "garbage, 10.0.0.2",
+			trusted:    proxy,
+			expected:   "10.0.0.1",
+		},
+		{
+			name:       "IPv6 trusted proxy",
+			remoteAddr: "[fd00::1]:1234",
+			xff:        "2001:db8::1",
+			trusted:    proxyV6,
+			expected:   "2001:db8::1",
+		},
+		{
+			name:       "unparseable remote address fails closed",
+			remoteAddr: "garbage",
+			xff:        "1.2.3.4",
+			trusted:    proxy,
+			expectErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := trustedClientIP(tt.remoteAddr, tt.xff, tt.trusted)
+			if tt.expectErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+// TestRateLimitContractFloor pins the limiter's burst floor from the
+// repository's security contract (rateLimitRate RPS / rateLimitBurst
+// burst per client IP): a burst strictly under the burst size must all be
+// admitted. A regression shrinking the limiter below the contract starves
+// the burst and fails here.
+func TestRateLimitContractFloor(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping rate limit test in short mode")
+	}
+
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+	}
+	e := echo.New()
+	setupMiddlewares(e, cnf)
+	e.GET("/probe", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	// A burst below the burst size: no refill needed, all admitted.
+	const burstRequests = rateLimitBurst - 5
+	for i := 0; i < burstRequests; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/probe", nil)
+		req.RemoteAddr = "203.0.113.7:55555"
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code,
+			"a %d-request burst must be admitted (limiter shrank below the %d RPS / burst %d contract?)",
+			burstRequests, rateLimitRate, rateLimitBurst)
+	}
+}
+
+// TestRateLimitSpoofedHeadersShareOneBucket pins finding #5 end to end
+// through the middleware stack: with no trusted proxy configured, rotating
+// X-Forwarded-For from one connection must NOT earn a fresh bucket per
+// request — the shared bucket must exhaust and start answering 429. This
+// drives the middleware's actual IdentifierExtractor: it would fail if
+// setupMiddlewares ever reverted to ctx.RealIP().
+func TestRateLimitSpoofedHeadersShareOneBucket(t *testing.T) {
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+	}
+	e := echo.New()
+	setupMiddlewares(e, cnf)
+	e.GET("/probe", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	// Enough rapid requests to exhaust the burst and outpace any refill:
+	// from one RemoteAddr with a different spoofed header each, they must
+	// hit the single shared bucket.
+	saw429 := false
+	for i := 0; i < rateLimitBurst+rateLimitRate; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/probe", nil)
+		req.RemoteAddr = "203.0.113.7:55555"
+		req.Header.Set(echo.HeaderXForwardedFor, fmt.Sprintf("1.2.3.%d", i))
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if rec.Code == http.StatusTooManyRequests {
+			saw429 = true
+			break
+		}
+		assert.Equal(t, http.StatusOK, rec.Code, "unexpected status on request %d", i+1)
+	}
+
+	assert.True(t, saw429,
+		"15 requests from one RemoteAddr with rotating X-Forwarded-For must exhaust one shared bucket (no 429 seen: each spoof got a fresh bucket)")
+}
+
+// TestRateLimitExtractorErrorFailsClosedWith429 pins the extractor-error
+// path: Echo routes IdentifierExtractor errors to RateLimiterConfig's
+// ErrorHandler (not DenyHandler), whose default would answer 403 with the
+// raw error. An unusable client identifier must fail closed with the same
+// constant 429 response as an exhausted bucket, AND the underlying error
+// must be logged — a systemic client-identification failure must not become
+// a silent wall of 429s with no diagnostic trace.
+func TestRateLimitExtractorErrorFailsClosedWith429(t *testing.T) {
+	var logBuf bytes.Buffer
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+	}
+	e := echo.New()
+	setupMiddlewares(e, cnf)
+	// echo.New() defaults the logger to ERROR, which would suppress the
+	// Warnf this test asserts on (production gets INFO via NewServer).
+	e.Logger.SetLevel(gommonlog.INFO)
+	e.Logger.SetOutput(&logBuf)
+	e.GET("/probe", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/probe", nil)
+	req.RemoteAddr = "not-an-address"
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
+	assert.Equal(t, `{"error":"rate limit exceeded"}`+"\n", rec.Body.String(),
+		"the constant 429 body must not leak the underlying error")
+	assert.Contains(t, logBuf.String(), "rate-limit client identification failed",
+		"the extractor error must be logged, not swallowed")
+}
+
+// TestRateLimitAppendedXFFFieldIsHonored pins the multi-field handling: a
+// trusted proxy that APPENDS its entry as a second X-Forwarded-For header
+// field must not be ignored — Header.Get would return only the
+// attacker-controlled first field and rotate buckets per request.
+func TestRateLimitAppendedXFFFieldIsHonored(t *testing.T) {
+	proxy := parseTrustedProxies("10.0.0.0/8")
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+		TrustedProxies:     proxy,
+	}
+	e := echo.New()
+	setupMiddlewares(e, cnf)
+	e.GET("/probe", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	// Enough rapid requests to exhaust the burst and outpace any refill.
+	saw429 := false
+	for i := 0; i < rateLimitBurst+rateLimitRate; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/probe", nil)
+		req.RemoteAddr = "10.0.0.1:55555" // trusted proxy
+		// Attacker sends the first field with a fresh address each time;
+		// the proxy appends the real client as a second field.
+		req.Header["X-Forwarded-For"] = []string{fmt.Sprintf("1.2.3.%d", i), "203.0.113.7"}
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		if rec.Code == http.StatusTooManyRequests {
+			saw429 = true
+			break
+		}
+		assert.Equal(t, http.StatusOK, rec.Code, "unexpected status on request %d", i+1)
+	}
+
+	assert.True(t, saw429,
+		"appended real-client field must dominate: all requests share one bucket (fresh attacker field must not rotate buckets)")
+}
+
+// TestAccessLogRemoteIPMatchesRateLimitIdentity pins the access-log
+// remote_ip derivation: it must come from the same trustedClientIP logic as
+// the rate limiter, not from v.RemoteIP (echo fills that via c.RealIP(),
+// which honors X-Forwarded-For unconditionally). Otherwise an attacker
+// rotating the header pollutes the forensic log with arbitrary IPs that
+// disagree with the rate-limit identity actually enforced.
+func TestAccessLogRemoteIPMatchesRateLimitIdentity(t *testing.T) {
+	tests := []struct {
+		name         string
+		trustedProxy string
+		remoteAddr   string
+		xff          string
+		wantIP       string
+	}{
+		{
+			name:       "no trusted proxy: spoofed header ignored, peer logged",
+			remoteAddr: "203.0.113.7:55555",
+			xff:        "1.2.3.4",
+			wantIP:     "203.0.113.7",
+		},
+		{
+			name:         "trusted proxy: XFF client logged",
+			trustedProxy: "10.0.0.0/8",
+			remoteAddr:   "10.0.0.1:55555",
+			xff:          "203.0.113.7",
+			wantIP:       "203.0.113.7",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var logBuf bytes.Buffer
+			cnf := conf{
+				HttpBindingAddress: ":8080",
+				VaultPrefix:        "cubbyhole/",
+				TrustedProxies:     parseTrustedProxies(tt.trustedProxy),
+			}
+			e := echo.New()
+			setupMiddlewares(e, cnf)
+			e.Logger.SetOutput(&logBuf)
+			e.GET("/probe", func(c echo.Context) error {
+				return c.String(http.StatusOK, "ok")
+			})
+
+			req := httptest.NewRequest(http.MethodGet, "/probe", nil)
+			req.RemoteAddr = tt.remoteAddr
+			req.Header.Set(echo.HeaderXForwardedFor, tt.xff)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Contains(t, logBuf.String(), `"remote_ip":"`+tt.wantIP+`"`,
+				"access log remote_ip must match the rate-limit identity")
+		})
+	}
 }

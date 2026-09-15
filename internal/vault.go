@@ -1,11 +1,31 @@
 package internal
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"math"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
 
 	"github.com/hashicorp/vault/api"
 )
+
+// bootValidationTimeout bounds the boot-time Vault requests (LookupSelf and
+// the capability checks): they must never hang startup indefinitely.
+const bootValidationTimeout = 30 * time.Second
+
+// vaultHTTPTimeout is the default per-request timeout for the Vault API
+// client — including the contextless Store/Get calls on the one-time-token
+// clients: a Vault that accepts connections but never answers must not
+// block request goroutines (or the boot self-test goroutine) until the
+// process exits. Tests inject a smaller timeout through the vault struct's
+// httpTimeout field instead of touching the constant.
+const vaultHTTPTimeout = 30 * time.Second
 
 // SecretMsgStorer defines the interface for storing and retrieving self-destructing messages.
 // Implementations must ensure messages are deleted after first retrieval (one-time access).
@@ -25,16 +45,190 @@ type vault struct {
 	prefix string
 	// token is the Vault authentication token (read from VAULT_TOKEN if empty).
 	token string
+	// httpTimeout overrides the per-request Vault API timeout (tests inject
+	// a smaller value); zero means the vaultHTTPTimeout default.
+	httpTimeout time.Duration
 }
 
-// NewVault creates a new vault client and starts a background goroutine for token renewal.
+// NewVault creates a new vault client, validates connectivity and the token
+// with a LookupSelf call, and starts a background goroutine for token renewal.
 // If address or token are empty, they will be read from VAULT_ADDR and VAULT_TOKEN
 // environment variables respectively. The prefix determines the Vault storage path.
-func NewVault(address string, prefix string, token string) *vault {
-	v := &vault{address, prefix, token}
+// A failed boot validation returns an error instead of a degraded store: the
+// service cannot store or retrieve secrets without a working Vault connection,
+// so failing loudly is preferable to serving 500s until the first request
+// hits the broken client.
+func NewVault(ctx context.Context, address string, prefix string, token string) (*vault, error) {
+	v := &vault{address: address, prefix: prefix, token: token}
 
-	go v.newVaultClientToRenewToken()
-	return v
+	c, err := v.newVaultClient()
+	if err != nil {
+		return nil, fmt.Errorf("vault client initialization failed: %w", err)
+	}
+
+	// Boot validation (lookup + capability checks) must not hang forever on
+	// a Vault that accepts connections but stops responding — a hung boot
+	// never starts the HTTP server, so no restart policy can help. Bound
+	// only the validation; the long-lived ctx keeps governing the renewal
+	// goroutine.
+	bootCtx, cancel := context.WithTimeout(ctx, bootValidationTimeout)
+	defer cancel()
+
+	lookup, err := c.Auth().Token().LookupSelfWithContext(bootCtx)
+	if err != nil {
+		return nil, fmt.Errorf("vault connection or token validation failed (check VAULT_ADDR and VAULT_TOKEN): %w", err)
+	}
+	// ParseSecret returns (nil, nil) for an empty response body; proceeding
+	// would panic in the renewal goroutine on lookup.Data.
+	if lookup == nil || lookup.Data == nil {
+		return nil, fmt.Errorf("vault returned an empty token lookup response")
+	}
+
+	renewable, _, err := validateBootLookup(lookup)
+	if err != nil {
+		return nil, err
+	}
+	if err := v.verifyCapabilities(bootCtx, c); err != nil {
+		return nil, err
+	}
+	if renewable {
+		// Renewal is essential for a renewable token and the lifetime
+		// watcher special-cases renew-self permission denials into a silent
+		// non-renewable countdown, so prove it functionally with a real
+		// renewal. Run it AFTER the self-test (which consumes part of the
+		// lease) so the refreshed TTL below is measured close to the
+		// watcher's start; this works even when the token cannot query its
+		// own capabilities.
+		renewed, rerr := c.Auth().Token().RenewSelfWithContext(bootCtx, 0)
+		if rerr != nil {
+			return nil, fmt.Errorf("renewable vault token cannot renew itself: %w", rerr)
+		}
+		// ParseSecret returns (nil, nil) for an empty body; accepting that
+		// here would pass the renewal check without proving a valid lease.
+		// A zero lease duration is equally unproven: the watcher would seed
+		// with zero and fall back to its default timing, which can miss a
+		// short-lived lease.
+		if renewed == nil || renewed.Auth == nil {
+			return nil, fmt.Errorf("vault returned an empty token renewal response")
+		}
+		if renewed.Auth.LeaseDuration <= 0 {
+			return nil, fmt.Errorf("vault returned a token renewal response without a lease duration")
+		}
+		lookup.Data["ttl"] = float64(renewed.Auth.LeaseDuration)
+	}
+
+	go v.renewToken(ctx, c, lookup)
+	return v, nil
+}
+
+// verifyCapabilities checks that the configured token's ACLs cover the
+// operations the service performs: creating one-time tokens (auth/token/create),
+// writing and reading the storage prefix, and — for a renewable token —
+// renewing itself (the LifetimeWatcher special-cases renew-self permission
+// denials into a silent non-renewable countdown, so the gap must be caught
+// here). LookupSelf only proves authentication; a token missing these
+// capabilities would pass boot and then fail on every secret operation, so
+// the gap fails loudly here. An auth rejection on the capabilities query
+// itself means the token cannot self-inspect — the check degrades to a
+// warning rather than blocking a possibly-valid deployment — but any other
+// error (transport, 5xx, …) fails boot: starting with unverified
+// capabilities would recreate the degraded state this check exists to
+// prevent.
+func (v vault) verifyCapabilities(ctx context.Context, c *api.Client) error {
+	caps, err := c.Sys().CapabilitiesSelfWithContext(ctx, "auth/token/create")
+	if err != nil {
+		// The probe itself failed: when it was merely denied (the token
+		// cannot self-inspect), continue to the remaining checks instead of
+		// treating this probe as passed.
+		if qerr := v.capabilitiesQueryError(err); qerr != errSkippedCapabilityCheck {
+			return qerr
+		}
+	} else if !hasAnyCapability(caps, "root", "update") {
+		// Vault evaluates token creation as an update operation: a policy
+		// granting only "create" reports "create" here yet still gets denied
+		// on the actual create call.
+		return fmt.Errorf("vault token lacks the required capability on auth/token/create (need update; have %v)", caps)
+	}
+
+	// A capability probe on a sentinel path cannot prove what the real
+	// operations need: policies can grant the probe while denying the
+	// actual token paths. Run one full store/retrieve cycle through the
+	// real code path instead — it exercises token creation, the write and
+	// the read exactly as requests will. The throwaway message is consumed
+	// by the read, so the self-test leaves nothing behind.
+	return v.boundedSelfTest(ctx)
+}
+
+// selfTest performs one full store/retrieve cycle with a throwaway message
+// to prove the token can really do everything the service needs on the
+// paths actually used by Store and Get.
+func (v vault) selfTest() error {
+	const probeMsg = "boot self-test message"
+	probe, err := v.Store(probeMsg, "1m")
+	if err != nil {
+		return fmt.Errorf("vault boot self-test failed on store: %w", err)
+	}
+	msg, err := v.Get(probe)
+	if err != nil {
+		return fmt.Errorf("vault boot self-test failed on retrieve: %w", err)
+	}
+	if msg != probeMsg {
+		return fmt.Errorf("vault boot self-test retrieved an unexpected message")
+	}
+	return nil
+}
+
+// capabilitiesQueryError decides the outcome of a failed capabilities query:
+// only an auth rejection is skippable (the token cannot self-inspect, but may
+// still be fully functional — the caller then continues to the remaining
+// checks instead of trusting a nil result); everything else means Vault
+// itself is unreliable and the unverified-capability boot must fail.
+func (v vault) capabilitiesQueryError(err error) error {
+	if isTerminalTokenError(err) {
+		log.Printf("warning: unable to verify Vault capabilities (sys/capabilities-self denied): %v", err)
+		return errSkippedCapabilityCheck
+	}
+	return fmt.Errorf("unable to verify Vault capabilities: %w", err)
+}
+
+// errSkippedCapabilityCheck signals that a capability probe was skipped
+// (denied sys/capabilities-self) — non-fatal, but the caller must not treat
+// the probe as passed.
+var errSkippedCapabilityCheck = errors.New("capability check skipped")
+
+// boundedSelfTest runs the boot self-test raced against the boot context:
+// the underlying Vault calls in Store/Get are contextless, so without this
+// race a Vault that accepts connections but hangs on requests could still
+// block boot indefinitely. When ctx wins, NewVault fails boot; the losing
+// goroutine terminates on its own — every request the client makes is
+// bounded by the vaultHTTPTimeout.
+func (v vault) boundedSelfTest(ctx context.Context) error {
+	done := make(chan error, 1)
+	go func() { done <- v.selfTest() }()
+	select {
+	case err := <-done:
+		if ctx.Err() != nil {
+			// The boot bound expired; a self-test finishing late must not
+			// let startup proceed past it.
+			return fmt.Errorf("vault boot self-test timed out after %s", bootValidationTimeout)
+		}
+		return err
+	case <-ctx.Done():
+		return fmt.Errorf("vault boot self-test timed out after %s", bootValidationTimeout)
+	}
+}
+
+// hasAnyCapability reports whether the capability list contains any of the
+// given capabilities (Vault reports "root" for root tokens).
+func hasAnyCapability(caps []string, wanted ...string) bool {
+	for _, capability := range caps {
+		for _, w := range wanted {
+			if capability == w {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Store saves a message to Vault with the specified time-to-live (TTL).
@@ -52,10 +246,46 @@ func (v vault) Store(msg string, ttl string) (token string, err error) {
 		return "", err
 	}
 
-	if v.writeMsgToVault(t, msg) != nil {
-		return "", err
+	// The write failure must be returned, not the (nil) token-creation
+	// error: swallowing it made Store report success with an empty token
+	// while nothing was stored, and the client received a link that can
+	// never be read.
+	if werr := v.writeMsgToVault(t, msg); werr != nil {
+		return "", redactTokenFromError(werr, t)
 	}
 	return t, nil
+}
+
+// redactedError wraps an error while stripping one-time Vault tokens from
+// its message. Unwrap preserves the error identity: errors.As/errors.Is can
+// still reach the underlying *api.ResponseError, whose status code feeds
+// the terminal-error classification of the renewal loop. Rebuilding the
+// message with errors.New would sever that chain.
+type redactedError struct {
+	err    error
+	tokens []string
+}
+
+func (e *redactedError) Error() string {
+	return redactTokensFromText(e.err.Error(), e.tokens)
+}
+
+func (e *redactedError) Unwrap() error { return e.err }
+
+// redactTokenFromError removes a one-time Vault token from a non-nil error message.
+// Vault transport errors embed the request URL, whose path contains the
+// token, and handlers log store errors verbatim — without redaction the
+// token would reach the logs, defeating the redaction applied to the
+// access log. The URL-escaped variants are redacted too: transport errors
+// may quote the percent-encoded request URL rather than the raw token.
+func redactTokenFromError(err error, token string) error {
+	if err == nil {
+		return nil
+	}
+	return &redactedError{
+		err:    err,
+		tokens: []string{token, url.PathEscape(token), url.QueryEscape(token)},
+	}
 }
 
 // createOneTimeToken creates a non-renewable Vault token with exactly 2 uses.
@@ -79,6 +309,18 @@ func (v vault) createOneTimeToken(ttl string) (string, error) {
 		return "", err
 	}
 
+	return tokenFromCreateResponse(s)
+}
+
+// tokenFromCreateResponse extracts the one-time token from a token-create
+// response, guarding against a malformed success: ParseSecret returns
+// (nil, nil) for an empty body, and dereferencing s.Auth.ClientToken on that
+// would panic — in the boot self-test goroutine (no Recover middleware) or
+// in a request goroutine (500 instead of a clean error).
+func tokenFromCreateResponse(s *api.Secret) (string, error) {
+	if s == nil || s.Auth == nil || s.Auth.ClientToken == "" {
+		return "", fmt.Errorf("vault returned an empty token creation response")
+	}
 	return s.Auth.ClientToken, nil
 }
 
@@ -90,6 +332,18 @@ func (v vault) newVaultClient() (*api.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Every request — including the contextless Store/Get calls — is
+	// bounded: the api client wraps each request in a context with this
+	// timeout (RawRequestWithContext → withConfiguredTimeout), so a Vault
+	// that accepts connections but never answers cannot hang request
+	// goroutines (or the boot self-test goroutine) until the process
+	// exits. The Vault default is 60s; align it with the boot bound.
+	timeout := v.httpTimeout
+	if timeout == 0 {
+		timeout = vaultHTTPTimeout
+	}
+	c.SetClientTimeout(timeout)
 
 	if v.token != "" {
 		c.SetToken(v.token)
@@ -134,9 +388,20 @@ func (v vault) Get(token string) (msg string, err error) {
 
 	r, err := c.Logical().Read(v.prefix + token)
 	if err != nil {
-		return "", err
+		return "", redactTokenFromError(err, token)
 	}
-	return r.Data["msg"].(string), nil
+	// ParseSecret returns (nil, nil) for an empty body, and the msg field
+	// could be missing or not a string; dereferencing unguarded would panic
+	// the self-test goroutine or a request goroutine instead of returning
+	// the error the handlers expect.
+	if r == nil || r.Data == nil {
+		return "", fmt.Errorf("vault returned an empty secret response")
+	}
+	msg, ok := r.Data["msg"].(string)
+	if !ok {
+		return "", fmt.Errorf("vault returned a secret without a readable message")
+	}
+	return msg, nil
 }
 
 // newVaultClientWithToken creates a Vault client authenticated with a specific token.
@@ -150,45 +415,380 @@ func (v vault) newVaultClientWithToken(token string) (*api.Client, error) {
 	return c, nil
 }
 
-// newVaultClientToRenewToken runs in a background goroutine to automatically renew
-// the main Vault authentication token before it expires. This ensures continuous
+// renewToken runs in a background goroutine to automatically renew the main
+// Vault authentication token before it expires. This ensures continuous
 // operation of the service without manual token refresh.
-func (v vault) newVaultClientToRenewToken() {
-	c, err := v.newVaultClient()
-	if err != nil {
-		log.Println(err)
+//
+// The lookup result obtained during NewVault's boot validation is passed in:
+// re-querying it here would open a window where a transient Vault/network
+// hiccup permanently disables renewal for an otherwise renewable token. One
+// lifetime watcher is monitored until its lease ends (DoneCh fires) — the
+// watcher itself keeps renewing and reports each success on RenewCh, so the
+// select must stay on the same watcher across renewals: recreating it after
+// every RenewCh event would stack a new concurrent renewal loop on top of
+// the still-running previous one. After DoneCh the token is re-validated: a
+// transient failure just retries, but an auth rejection means the token can
+// never renew again, so the process exits (fail-loud, matching NewVault) and
+// the supervisor's restart policy brings it back with a fresh token. The
+// goroutine exits cleanly on ctx cancellation (server shutdown) or when the
+// token is not renewable (e.g. the Vault dev root token), which needs no
+// renewal.
+func (v vault) renewToken(ctx context.Context, c *api.Client, lookup *api.Secret) {
+	if renewable, ok := lookup.Data["renewable"].(bool); !ok || !renewable {
+		log.Println("vault token is not renewable; token renewal disabled")
+		return
 	}
-	client_auth_token := &api.Secret{Auth: &api.SecretAuth{ClientToken: c.Token(), Renewable: true}}
 
-	/* */
-	log.Println("renew cycle: begin")
-	defer log.Println("renew cycle: end")
-
-	// auth token
-	authTokenWatcher, err := c.NewLifetimeWatcher(&api.LifetimeWatcherInput{
-		Secret: client_auth_token,
-	})
-
-	if err != nil {
-		err := fmt.Errorf("unable to initialize auth token lifetime watcher: %w", err)
-		fmt.Println(err.Error())
-	}
-
-	go authTokenWatcher.Start()
-	defer authTokenWatcher.Stop()
-
-	// monitor events from both watchers
+	const retryDelay = 30 * time.Second
 	for {
-		select {
+		// Seed the watcher with the token's current lease duration:
+		// LifetimeWatcher schedules its first renewal from
+		// SecretAuth.LeaseDuration, and leaving it zero would make the
+		// watcher fall back to its own default timing instead of the
+		// token's actual TTL. RenewBehaviorErrorOnErrors surfaces renewal
+		// failures on DoneCh instead of silently converting them into a
+		// non-renewable countdown.
+		watcher, err := c.NewLifetimeWatcher(&api.LifetimeWatcherInput{
+			Secret: &api.Secret{Auth: &api.SecretAuth{
+				ClientToken:   c.Token(),
+				Renewable:     true,
+				LeaseDuration: leaseDuration(lookup),
+			}},
+			RenewBehavior: api.RenewBehaviorErrorOnErrors,
+		})
+		if err != nil {
+			log.Printf("unable to initialize auth token lifetime watcher: %v", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(retryDelay):
+				continue
+			}
+		}
 
-		case err := <-authTokenWatcher.DoneCh():
-			// Leases created by a token get revoked when the token is revoked.
-			fmt.Println("Error is :", err)
+		// Start() blocks for the life of the watcher (its body is
+		// `doneCh <- doRenew()`; it does not take a context), so it must
+		// run in its own goroutine — calling it synchronously would prevent
+		// the select below from ever observing DoneCh, RenewCh or ctx
+		// cancellation. Shutdown relies on watcher.Stop(): Stop closes the
+		// watcher's internal stopCh, the loop exits, and Start returns
+		// (doneCh is buffered, so the final send cannot block).
+		go watcher.Start()
 
-		// RenewCh is a channel that receives a message when a successful
-		// renewal takes place and includes metadata about the renewal.
-		case info := <-authTokenWatcher.RenewCh():
-			log.Printf("auth token: successfully renewed; remaining duration: %ds", info.Secret.Auth.LeaseDuration)
+		watcherDone := false
+		for !watcherDone {
+			select {
+			case <-ctx.Done():
+				watcher.Stop()
+				return
+
+			// The lease ended (expired, revoked, or renewal terminally
+			// failed): stop the watcher, back off, then re-validate the
+			// token before building a new one.
+			case err := <-watcher.DoneCh():
+				watcher.Stop()
+				watcherDone = true
+				// The watcher runs with RenewBehaviorErrorOnErrors, so a
+				// failed renewal reaches DoneCh as an error instead of being
+				// converted into a non-renewable countdown. A renew-self
+				// rejection means this token can never renew again — exit
+				// loudly so the supervisor restarts with a fresh token.
+				if isTerminalRenewalError(err) {
+					log.Fatalf("vault auth token renewal terminally failed: %v; exiting so the supervisor can restart with a fresh token", err)
+				}
+				// Revalidate immediately, then back off only between failed
+				// lookups: sleeping before the first attempt could let a
+				// short-lived token expire during the wait, turning a
+				// recoverable outage into a fatal auth rejection.
+				log.Printf("vault auth token lease ended (%v); revalidating", err)
+				fresh, ok := v.revalidateToken(ctx, c, retryDelay)
+				if !ok {
+					return
+				}
+				lookup = fresh
+
+			// RenewCh is a channel that receives a message when a successful
+			// renewal takes place and includes metadata about the renewal.
+			// Stay on the same watcher: it keeps running and renewing.
+			case info := <-watcher.RenewCh():
+				// A malformed renewal confirmation is metadata damage, not
+				// proof the token died — RenewCh only fires on a successful
+				// renewal, and a malformed response shape can be
+				// transient. A zero duration would make the recreated
+				// watcher fall back to its default schedule, so it is
+				// treated as malformed too. log.Fatalf here would skip the
+				// graceful shutdown and sever in-flight one-time reads, so
+				// instead stop the watcher and revalidate: transient
+				// failures retry, and a token that really is dead still
+				// exits via the terminal classifiers.
+				if malformedRenewalConfirmation(info) {
+					log.Printf("vault returned an empty renewal confirmation; stopping the watcher and revalidating")
+					watcher.Stop()
+					watcherDone = true
+					fresh, ok := v.revalidateToken(ctx, c, retryDelay)
+					if !ok {
+						return
+					}
+					lookup = fresh
+					continue
+				}
+				log.Printf("auth token: successfully renewed; remaining duration: %ds", info.Secret.Auth.LeaseDuration)
+			}
 		}
 	}
+}
+
+// malformedRenewalConfirmation reports whether a RenewCh output is too
+// damaged to trust as a renewal confirmation: a nil output (a closed
+// channel yields a nil pointer), a nil secret/auth, or a confirmation
+// without a lease duration (the recreated watcher would fall back to its
+// default schedule).
+func malformedRenewalConfirmation(info *api.RenewOutput) bool {
+	return info == nil || info.Secret == nil || info.Secret.Auth == nil || info.Secret.Auth.LeaseDuration <= 0
+}
+
+// revalidateToken re-looks-up the token and re-proves renew-self, retrying
+// transient failures with backoff until both succeed. It returns the fresh
+// lookup seeded with the proven renewal's TTL — seeding the next watcher
+// from anything stale would ignore the lease aging during the wait — or
+// (nil, false) when ctx was cancelled during a backoff. Each lookup is
+// bounded: an unresponsive Vault must not block the renewal loop
+// indefinitely.
+func (v vault) revalidateToken(ctx context.Context, c *api.Client, retryDelay time.Duration) (*api.Secret, bool) {
+	for {
+		lookupCtx, cancelLookup := context.WithTimeout(ctx, bootValidationTimeout)
+		fresh, lerr := c.Auth().Token().LookupSelfWithContext(lookupCtx)
+		cancelLookup()
+		if lerr != nil {
+			if isTerminalTokenError(lerr) {
+				log.Fatalf("vault auth token is no longer valid: %v; exiting so the supervisor can restart with a fresh token", lerr)
+			}
+			// Transient (network, 5xx…): keep retrying the lookup with
+			// backoff rather than seeding the next watcher from stale data.
+			log.Printf("vault token revalidation failed (%v); retrying in %s", lerr, retryDelay)
+			select {
+			case <-ctx.Done():
+				return nil, false
+			case <-time.After(retryDelay):
+			}
+			continue
+		}
+		if fresh == nil || fresh.Data == nil {
+			// Malformed Vault response: same fail-loud treatment as an
+			// empty boot lookup.
+			log.Fatalf("vault returned an empty token lookup during renewal; exiting so the supervisor can restart")
+		}
+		if renewable, ok := fresh.Data["renewable"].(bool); !ok || !renewable {
+			// A token that starts non-renewable needs no renewal (handled
+			// at boot); one that stops being renewable after a lease end is
+			// degrading — the HTTP server would keep serving on a token
+			// that is about to die, so exit fail-loud like the other
+			// terminal paths.
+			log.Fatalf("vault auth token is no longer renewable; exiting so the supervisor can restart with a fresh token")
+		}
+		// Re-prove renew-self: the watcher special-cases renew-self
+		// permission denials into a silent non-renewable countdown, so a
+		// revocation mid-flight would otherwise cycle through watchers
+		// without ever failing loudly. A successful renewal also refreshes
+		// the lease, which seeds the next watcher.
+		// Bound the re-proof renewal with bootValidationTimeout, not the
+		// backoff delay: retuning the backoff must not silently change the
+		// per-call renewal deadline.
+		renewCtx, cancel := context.WithTimeout(ctx, bootValidationTimeout)
+		renewed, rerr := c.Auth().Token().RenewSelfWithContext(renewCtx, 0)
+		cancel()
+		if rerr != nil {
+			if isTerminalRenewalError(rerr) {
+				log.Fatalf("vault auth token can no longer renew itself: %v; exiting so the supervisor can restart with a fresh token", rerr)
+			}
+			// Non-terminal (network, 5xx…): with ErrorOnErrors the
+			// recreated watcher exits on its first renewal failure, so
+			// recreating it immediately would spin the loop and hammer
+			// Vault. Back off, then restart the cycle from a fresh lookup.
+			log.Printf("vault auth token renewal re-proof failed (%v); retrying in %s", rerr, retryDelay)
+			select {
+			case <-ctx.Done():
+				return nil, false
+			case <-time.After(retryDelay):
+			}
+			continue
+		}
+		if renewed == nil || renewed.Auth == nil || renewed.Auth.LeaseDuration <= 0 {
+			// Malformed success (empty body, or a body without a lease
+			// duration — the recreated watcher would fall back to its
+			// default schedule): same fail-loud treatment as an empty
+			// lookup response.
+			log.Fatalf("vault returned an empty token renewal response during renewal; exiting so the supervisor can restart")
+		}
+		fresh.Data["ttl"] = float64(renewed.Auth.LeaseDuration)
+		return fresh, true
+	}
+}
+
+// validateBootLookup checks a LookupSelf response before the service
+// starts. It returns whether the token is renewable and its ttl in
+// seconds, and rejects:
+//   - a renewable field present with a wrong type (absent is the legitimate
+//     root-token case — non-renewable with no TTL; a type assertion alone
+//     cannot tell the two apart and would silently accept the malformed one);
+//   - a malformed, negative or non-integral ttl (leaseDuration would
+//     silently turn any of them into zero, which reads as "no expiry" —
+//     exactly the degraded state the guard exists to prevent). A finite
+//     non-renewable token would silently expire under the running server
+//     with no lease monitoring to catch it, so it is rejected too;
+//   - a finite use count (num_uses > 0): the boot probes consume uses, and
+//     once exhausted the server starts failing on every request — the
+//     service token must have unlimited uses. A wrong-typed or malformed
+//     num_uses is rejected as well; only an absent field is tolerated
+//     (auth backends that do not expose it).
+func validateBootLookup(lookup *api.Secret) (renewable bool, ttlSeconds int, err error) {
+	rawRenewable, hasRenewable := lookup.Data["renewable"]
+	renewable = false
+	if hasRenewable {
+		r, isBool := rawRenewable.(bool)
+		if !isBool {
+			return false, 0, fmt.Errorf("vault returned a malformed renewable field (%T)", rawRenewable)
+		}
+		renewable = r
+	}
+
+	ttlSeconds, ttlErr := tokenTTLSeconds(lookup)
+	if ttlErr != nil {
+		if !hasRenewable {
+			// Neither renewable nor a valid ttl: a lookup like this cannot
+			// be classified, and accepting it would silently disable
+			// renewal on a possibly-finite token.
+			return false, 0, fmt.Errorf("vault returned a token lookup without renewable or ttl information: %w", ttlErr)
+		}
+		// A renewable token with a malformed ttl: the lookup itself is
+		// malformed, reject rather than guess.
+		return false, 0, fmt.Errorf("vault returned a malformed token ttl: %w", ttlErr)
+	}
+	if !renewable && ttlSeconds > 0 {
+		return false, 0, fmt.Errorf("vault token is not renewable and expires in %ds; use a renewable token or a non-expiring one", ttlSeconds)
+	}
+
+	switch uses := lookup.Data["num_uses"].(type) {
+	case float64:
+		if uses < 0 {
+			return false, 0, fmt.Errorf("vault returned a malformed num_uses (%v)", uses)
+		}
+		if uses > 0 {
+			return false, 0, fmt.Errorf("vault token has a finite use count (%d); the service token must have unlimited uses", int(uses))
+		}
+	case json.Number:
+		n, perr := uses.Int64()
+		if perr != nil || n < 0 {
+			return false, 0, fmt.Errorf("vault returned a malformed num_uses (%q)", uses.String())
+		}
+		if n > 0 {
+			return false, 0, fmt.Errorf("vault token has a finite use count (%d); the service token must have unlimited uses", int(n))
+		}
+	default:
+		if rawUses, present := lookup.Data["num_uses"]; present {
+			return false, 0, fmt.Errorf("vault returned a malformed num_uses (%T); the service token must have unlimited uses", rawUses)
+		}
+	}
+
+	return renewable, ttlSeconds, nil
+}
+
+// tokenTTLSeconds extracts the token's ttl in seconds from a LookupSelf
+// result, rejecting malformed representations: leaseDuration would silently
+// turn a wrong-typed or negative ttl into a zero, which the boot validation
+// treats as "no expiry" — exactly the degraded state the guard exists to
+// prevent.
+func tokenTTLSeconds(lookup *api.Secret) (int, error) {
+	if lookup == nil {
+		return 0, fmt.Errorf("no lookup response")
+	}
+	raw, ok := lookup.Data["ttl"]
+	if !ok {
+		return 0, fmt.Errorf("no ttl information")
+	}
+	switch ttl := raw.(type) {
+	case float64:
+		// A fractional or out-of-range value would truncate to a wrong
+		// integer — 0.5 becomes 0, which reads as "no expiry" — so only an
+		// exact non-negative integer is accepted.
+		if ttl < 0 || ttl != math.Trunc(ttl) || ttl > math.MaxInt32 {
+			return 0, fmt.Errorf("malformed ttl value %v", ttl)
+		}
+		return int(ttl), nil
+	case json.Number:
+		n, err := ttl.Int64()
+		if err != nil {
+			return 0, fmt.Errorf("malformed ttl value %q", ttl.String())
+		}
+		// Same bound as the float64 path: a value too large for int can
+		// wrap on 32-bit builds (turning a finite lease into "no expiry")
+		// and overflow the watcher's duration arithmetic on any build.
+		if n < 0 || n > math.MaxInt32 {
+			return 0, fmt.Errorf("malformed ttl value %q", ttl.String())
+		}
+		return int(n), nil
+	}
+	return 0, fmt.Errorf("malformed ttl type %T", raw)
+}
+
+// leaseDuration extracts the token's lease duration in seconds from a
+// LookupSelf result, tolerating both float64 and json.Number representations.
+// Only used after boot validation has accepted the lookup, so a malformed
+// representation simply yields zero.
+func leaseDuration(lookup *api.Secret) int {
+	if lookup == nil {
+		return 0
+	}
+	switch ttl := lookup.Data["ttl"].(type) {
+	case float64:
+		return int(ttl)
+	case json.Number:
+		n, err := ttl.Int64()
+		if err == nil {
+			return int(n)
+		}
+	}
+	return 0
+}
+
+// isTerminalTokenError reports whether a LookupSelf error means the token
+// itself is dead (revoked/expired/unknown) rather than Vault being
+// unreachable — only the former makes renewal retrying pointless. Only 403
+// (auth rejected) and 404 (unknown token) qualify: Vault answers 400 for
+// many conditions unrelated to token death, so treating any 400 as terminal
+// would restart the process on a recoverable hiccup. Renewal errors have
+// their own classifier — see isTerminalRenewalError.
+func isTerminalTokenError(err error) bool {
+	var respErr *api.ResponseError
+	if errors.As(err, &respErr) {
+		switch respErr.StatusCode {
+		case http.StatusForbidden, http.StatusNotFound:
+			return true
+		}
+	}
+	return false
+}
+
+// isTerminalRenewalError reports whether a renew-self error means the token
+// can never renew again. 403/404 mean an auth rejection. A 400 is terminal
+// only when Vault's response says the lease itself can no longer be
+// renewed (max TTL reached, token made non-renewable) — the other 400
+// bodies are treated as transient and retried, matching how every other
+// non-auth failure in the renewal loop is handled.
+func isTerminalRenewalError(err error) bool {
+	var respErr *api.ResponseError
+	if !errors.As(err, &respErr) {
+		return false
+	}
+	switch respErr.StatusCode {
+	case http.StatusForbidden, http.StatusNotFound:
+		return true
+	case http.StatusBadRequest:
+		for _, msg := range respErr.Errors {
+			if strings.Contains(strings.ToLower(msg), "renewable") {
+				return true
+			}
+		}
+	}
+	return false
 }

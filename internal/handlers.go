@@ -101,11 +101,14 @@ func validateFileUpload(file *multipart.FileHeader) error {
 	return nil
 }
 
-// validateVaultToken checks the format of Vault-generated tokens
+// validateVaultToken checks the format of Vault-generated tokens. The
+// error carries a constant message: the token must never be reflected
+// back into the response or the access logs (the request logger records
+// the error string, so echoing the rejected token here would write it —
+// or an attacker-crafted lookalike — into the log file).
 func validateVaultToken(token string) error {
-	// Check token format
 	if !tokenRegex.MatchString(token) {
-		return fmt.Errorf("invalid token format: %s", token)
+		return fmt.Errorf("invalid token format")
 	}
 	return nil
 }
@@ -137,13 +140,15 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 
 		src, err := file.Open()
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err)
+			ctx.Logger().Errorf("Failed to open uploaded file: %v", err)
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to process upload")
 		}
 		defer func() { _ = src.Close() }()
 
 		b, err := io.ReadAll(src)
 		if err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, err)
+			ctx.Logger().Errorf("Failed to read uploaded file: %v", err)
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to process upload")
 		}
 
 		if len(b) > 0 {
@@ -152,7 +157,8 @@ func (s SecretHandlers) CreateMsgHandler(ctx echo.Context) error {
 
 			filetoken, err := s.store.Store(encodedFile, ttl)
 			if err != nil {
-				return echo.NewHTTPError(http.StatusInternalServerError, err)
+				ctx.Logger().Errorf("Failed to store uploaded file: %v", err)
+				return echo.NewHTTPError(http.StatusInternalServerError, "failed to store secret")
 			}
 			tr.FileToken = filetoken
 		}
