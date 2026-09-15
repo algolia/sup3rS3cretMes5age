@@ -305,6 +305,10 @@ cat > task-definition.json << EOF
         {
           "name": "VAULT_DEV_ROOT_TOKEN_ID",
           "value": "supersecret"
+        },
+        {
+          "name": "VAULT_DEV_LISTEN_ADDRESS",
+          "value": "0.0.0.0:8200"
         }
       ],
       "portMappings": [
@@ -313,6 +317,13 @@ cat > task-definition.json << EOF
           "protocol": "tcp"
         }
       ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget -q -O- http://127.0.0.1:8200/v1/sys/health || exit 1"],
+        "interval": 5,
+        "timeout": 3,
+        "retries": 10,
+        "startPeriod": 10
+      },
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
@@ -334,7 +345,7 @@ cat > task-definition.json << EOF
       "dependsOn": [
         {
           "containerName": "vault",
-          "condition": "START"
+          "condition": "HEALTHY"
         }
       ],
       "environment": [

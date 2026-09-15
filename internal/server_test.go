@@ -261,7 +261,8 @@ func TestServerRateLimiting(t *testing.T) {
 	successCount := 0
 	rateLimitCount := 0
 
-	for i := 0; i < 20; i++ {
+	// Enough rapid requests to exhaust the burst and outpace any refill.
+	for i := 0; i < rateLimitBurst+rateLimitRate; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		req.Header.Set("X-Real-IP", "192.168.1.1")
 		rec := httptest.NewRecorder()
@@ -408,6 +409,39 @@ func TestTrustedClientIP(t *testing.T) {
 	}
 }
 
+// TestRateLimitContractFloor pins the limiter's burst floor from the
+// repository's security contract (rateLimitRate RPS / rateLimitBurst
+// burst per client IP): a burst strictly under the burst size must all be
+// admitted. A regression shrinking the limiter below the contract starves
+// the burst and fails here.
+func TestRateLimitContractFloor(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping rate limit test in short mode")
+	}
+
+	cnf := conf{
+		HttpBindingAddress: ":8080",
+		VaultPrefix:        "cubbyhole/",
+	}
+	e := echo.New()
+	setupMiddlewares(e, cnf)
+	e.GET("/probe", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	// A burst below the burst size: no refill needed, all admitted.
+	const burstRequests = rateLimitBurst - 5
+	for i := 0; i < burstRequests; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/probe", nil)
+		req.RemoteAddr = "203.0.113.7:55555"
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code,
+			"a %d-request burst must be admitted (limiter shrank below the %d RPS / burst %d contract?)",
+			burstRequests, rateLimitRate, rateLimitBurst)
+	}
+}
+
 // TestRateLimitSpoofedHeadersShareOneBucket pins finding #5 end to end
 // through the middleware stack: with no trusted proxy configured, rotating
 // X-Forwarded-For from one connection must NOT earn a fresh bucket per
@@ -425,10 +459,11 @@ func TestRateLimitSpoofedHeadersShareOneBucket(t *testing.T) {
 		return c.String(http.StatusOK, "ok")
 	})
 
-	// Rate 5/s, burst 10: 15 rapid requests from one RemoteAddr with a
-	// different spoofed header each must hit the single shared bucket.
+	// Enough rapid requests to exhaust the burst and outpace any refill:
+	// from one RemoteAddr with a different spoofed header each, they must
+	// hit the single shared bucket.
 	saw429 := false
-	for i := 0; i < 15; i++ {
+	for i := 0; i < rateLimitBurst+rateLimitRate; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/probe", nil)
 		req.RemoteAddr = "203.0.113.7:55555"
 		req.Header.Set(echo.HeaderXForwardedFor, fmt.Sprintf("1.2.3.%d", i))
@@ -497,8 +532,9 @@ func TestRateLimitAppendedXFFFieldIsHonored(t *testing.T) {
 		return c.String(http.StatusOK, "ok")
 	})
 
+	// Enough rapid requests to exhaust the burst and outpace any refill.
 	saw429 := false
-	for i := 0; i < 15; i++ {
+	for i := 0; i < rateLimitBurst+rateLimitRate; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/probe", nil)
 		req.RemoteAddr = "10.0.0.1:55555" // trusted proxy
 		// Attacker sends the first field with a fresh address each time;

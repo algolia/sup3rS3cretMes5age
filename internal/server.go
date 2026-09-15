@@ -21,6 +21,15 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
+// Rate-limit configuration, pinned by the repository's security contract
+// (10 RPS / burst 20 per client IP): the middleware and the rate-limit
+// tests both derive their values and request counts from these constants,
+// so retuning the limiter touches this one place.
+const (
+	rateLimitRate  = 10
+	rateLimitBurst = 20
+)
+
 // Server encapsulates the HTTP/HTTPS server configuration and lifecycle management.
 // It provides testable server initialization and graceful shutdown capabilities.
 type Server struct {
@@ -330,12 +339,16 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 		MaxAge:       86400,
 	}))
 
-	// Limit to 5 RPS (burst 10) (only human should use this service)
+	// Limit to rateLimitRate RPS (rateLimitBurst burst) per client IP, per
+	// the repository's security contract: the security checklist pins the
+	// limiter at 10 RPS/burst 20 and flags any change as a protection
+	// regression. The rate-limit tests derive their request counts from
+	// these constants, so retuning touches this one place.
 	e.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
 		Store: middleware.NewRateLimiterMemoryStoreWithConfig(
 			middleware.RateLimiterMemoryStoreConfig{
-				Rate:      5,
-				Burst:     10,
+				Rate:      rateLimitRate,
+				Burst:     rateLimitBurst,
 				ExpiresIn: 1 * time.Minute,
 			},
 		),
