@@ -297,7 +297,7 @@ Create task definition:
 # list would let any VPC-internal peer rotate buckets and forge the logged IP.
 export ALB_SUBNET_CIDRS=$(aws ec2 describe-subnets \
     --subnet-ids $PUBLIC_SUBNET_1 $PUBLIC_SUBNET_2 \
-    --query 'Subnets[*].CidrBlock' --output text)
+    --query 'Subnets[*].CidrBlock' --output text | tr '\t' ',')
 ```
 
 ```bash
