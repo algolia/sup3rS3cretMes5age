@@ -430,6 +430,42 @@ func TestMalformedRenewalConfirmation(t *testing.T) {
 		Auth: &api.SecretAuth{LeaseDuration: 3600}}}), "a confirmed renewal with a duration is well-formed")
 }
 
+// TestRevalidateTokenRetriesMalformedResponses pins the non-terminal
+// treatment of malformed Vault responses during revalidation: a 200 with an
+// empty body (lookup or renewal) is transient metadata damage, retried with
+// backoff — not a log.Fatalf, which would sever in-flight one-time reads.
+// A regression to Fatalf kills the whole test binary, failing loudly here.
+func TestRevalidateTokenRetriesMalformedResponses(t *testing.T) {
+	// A Vault that always answers 200 with an empty JSON object: the lookup
+	// succeeds but yields no data, and a renewable token can never be proven.
+	malformed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer malformed.Close()
+
+	conf := api.DefaultConfig()
+	conf.Address = malformed.URL
+	conf.HttpClient = &http.Client{Timeout: 2 * time.Second}
+	c, err := api.NewClient(conf)
+	if !assert.NoError(t, err) {
+		return
+	}
+	c.SetToken("hvs.ABCDEFGHIJKLMNOPQRSTUVWX")
+
+	v := vault{address: malformed.URL, prefix: "secret/test/", token: c.Token()}
+
+	// The cycle must keep retrying until the context is cancelled — a
+	// bounded wait proves no exit happened (Fatalf would end the test
+	// binary before the deadline expires).
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	fresh, ok := v.revalidateToken(ctx, c, 50*time.Millisecond)
+
+	assert.False(t, ok, "the cancelled context must stop the retry cycle")
+	assert.Nil(t, fresh, "no fresh lookup can be proven against a malformed Vault")
+}
+
 // TestNewVaultFailsWhenCapabilitiesMissing pins the boot capability check:
 // LookupSelf only proves authentication; a token that can create one-time
 // tokens but cannot write the storage prefix must fail at boot (fail-loud)
