@@ -574,9 +574,19 @@ func (v vault) revalidateToken(ctx context.Context, c *api.Client, retryDelay ti
 			continue
 		}
 		if fresh == nil || fresh.Data == nil {
-			// Malformed Vault response: same fail-loud treatment as an
-			// empty boot lookup.
-			log.Fatalf("vault returned an empty token lookup during renewal; exiting so the supervisor can restart")
+			// Malformed Vault response (e.g. a 200 with an empty body):
+			// transient metadata damage, not proof the token is dead —
+			// the same class the RenewCh path deliberately retries. An
+			// exit here would sever in-flight one-time reads, so back off
+			// and restart the cycle; a persistently malformed Vault just
+			// keeps the loop retrying, like any other non-terminal outage.
+			log.Printf("vault returned an empty token lookup during renewal; retrying in %s", retryDelay)
+			select {
+			case <-ctx.Done():
+				return nil, false
+			case <-time.After(retryDelay):
+			}
+			continue
 		}
 		if renewable, ok := fresh.Data["renewable"].(bool); !ok || !renewable {
 			// A token that starts non-renewable needs no renewal (handled
@@ -616,9 +626,16 @@ func (v vault) revalidateToken(ctx context.Context, c *api.Client, retryDelay ti
 		if renewed == nil || renewed.Auth == nil || renewed.Auth.LeaseDuration <= 0 {
 			// Malformed success (empty body, or a body without a lease
 			// duration — the recreated watcher would fall back to its
-			// default schedule): same fail-loud treatment as an empty
-			// lookup response.
-			log.Fatalf("vault returned an empty token renewal response during renewal; exiting so the supervisor can restart")
+			// default schedule): transient metadata damage like the empty
+			// lookup above, so back off and restart the cycle from a
+			// fresh lookup rather than exiting over in-flight reads.
+			log.Printf("vault returned an empty token renewal response during renewal; retrying in %s", retryDelay)
+			select {
+			case <-ctx.Done():
+				return nil, false
+			case <-time.After(retryDelay):
+			}
+			continue
 		}
 		fresh.Data["ttl"] = float64(renewed.Auth.LeaseDuration)
 		return fresh, true
