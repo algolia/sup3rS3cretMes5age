@@ -77,6 +77,18 @@ spec:
             - name: http
               containerPort: {{ .Values.service.port | default "80"}}
               protocol: TCP
+          {{- with .Values.startupProbe }}
+          startupProbe:
+            httpGet:
+              path: {{ .path }}
+              port: {{ .port | default "http" }}
+              scheme: {{ .scheme | default "HTTP" }}
+            failureThreshold: {{ .failureThreshold }}
+            initialDelaySeconds: {{ .initialDelaySeconds }}
+            periodSeconds: {{ .periodSeconds }}
+            successThreshold: {{ .successThreshold }}
+            timeoutSeconds: {{ .timeoutSeconds }}
+          {{- end }}
           {{- with .Values.livenessProbe }}
           livenessProbe:
             httpGet:
