@@ -65,7 +65,7 @@ If your commit resolves an issue, add a closing keyword in the commit body or PR
 
 Requirements:
 
-- Go 1.26.1+
+- Go 1.27.3+
 - Docker
 - `curl`
 - `jq`
