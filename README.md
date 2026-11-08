@@ -398,7 +398,7 @@ SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH=/mnt/ssl/key_secrets.example.com.pem
 
 ### Prerequisites
 
-- Go 1.25.1 or later
+- Go 1.27.3 or later
 - Docker (for Vault dev server)
 - Make (optional, for convenience)
 
