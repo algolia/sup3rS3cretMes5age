@@ -9,7 +9,7 @@ deploy_cache_key: &deploy_cache_key deploy-tools-hadolint-2.12.0-helm-3.16.4
 executors:
   golang:
     docker:
-      - image: cimg/go:1.26
+      - image: cimg/go:1.27
   node:
     docker:
       - image: cimg/node:25.8
@@ -45,10 +45,25 @@ jobs:
               exit 1
             fi
       - run:
-          name: GolangCI Lint
+          name: Install golangci-lint
+          # Explicit download + exact-filename checksum match: upstream install.sh
+          # also matches the release's .sbom.json line in checksums.txt and fails.
+          environment:
+            GOLANGCI_LINT_VERSION: "2.15.0"
           command: |
-            golangci-lint --version
-            golangci-lint run --verbose
+            F="golangci-lint-${GOLANGCI_LINT_VERSION}-linux-amd64.tar.gz"
+            U="https://github.com/golangci/golangci-lint/releases/download/v${GOLANGCI_LINT_VERSION}"
+            cd /tmp
+            curl -sSfLO "${U}/${F}"
+            curl -sSfL "${U}/golangci-lint-${GOLANGCI_LINT_VERSION}-checksums.txt" | grep " ${F}\$" | sha256sum -c -
+            tar -xzf "${F}" -C "$(go env GOPATH)/bin" --strip-components=1 \
+              "golangci-lint-${GOLANGCI_LINT_VERSION}-linux-amd64/golangci-lint"
+      - run:
+          name: GolangCI Lint
+          # Explicit path: the image ships its own golangci-lint, which may shadow the pinned one on PATH
+          command: |
+            "$(go env GOPATH)/bin/golangci-lint" --version
+            "$(go env GOPATH)/bin/golangci-lint" run --verbose
       - save_cache: &save-cache
           paths:
             - /home/circleci/go/pkg/mod

@@ -5,7 +5,7 @@ Always reference these instructions first and fallback to search or bash command
 ## Working Effectively
 
 ### Bootstrap and Dependencies
-- Install Go 1.25.1+: `go version` must show go1.25.1 or later
+- Install Go 1.27.3+: `go version` must show go1.27.3 or later
 - Install Docker: Required for Vault development server
 - Install CLI tools for testing:
   ```bash
@@ -13,7 +13,7 @@ Always reference these instructions first and fallback to search or bash command
   sudo apt-get update && sudo apt-get install -y curl jq
   
   # Check installations
-  go version    # Must be 1.25.1+
+  go version    # Must be 1.27.3+
   docker --version
   curl --version
   jq --version
@@ -22,7 +22,7 @@ Always reference these instructions first and fallback to search or bash command
 ### Download Dependencies and Build
 - Download Go modules: `go mod download` -- takes 1-2 minutes. NEVER CANCEL. Set timeout to 180+ seconds.
 - Build binary: `go build -o sup3rs3cret cmd/sup3rS3cretMes5age/main.go` -- takes <1 second after dependencies downloaded.
-- Install linter: `curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.7.2` -- takes 30-60 seconds. Current system has v2.7.2.
+- Install linter: `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0` -- takes 30-60 seconds. (The upstream `install.sh` fails checksum verification for v2.15.0 because its pattern also matches the release's `.sbom.json` entry.) Current system has v2.15.0.
 
 ### Testing and Validation
 - Run unit tests: `make test` (2-3 minutes). NEVER CANCEL. Set timeout to 300+ seconds.
@@ -229,7 +229,7 @@ Direct requirements (verify against `go.mod` for exact versions — they move):
 ```go
 module github.com/algolia/sup3rS3cretMes5age
 
-go 1.26.1
+go 1.27.3
 
 require (
     github.com/hashicorp/vault v1.21.4
@@ -325,7 +325,7 @@ The project uses CircleCI with three jobs:
 2. **jslint**: JavaScript linting via pinned ESLint (see `eslint.config.mjs`)
 3. **test**: Unit tests via `make test`
 
-Pipeline runs on Go 1.26 docker image (`cimg/go:1.26`) for Go jobs and Node 25 (`cimg/node:25.8`) for jslint.
+Pipeline runs on Go 1.27 docker image (`cimg/go:1.27`) for Go jobs and Node 25 (`cimg/node:25.8`) for jslint.
 
 ### Helm Deployment
 Helm chart located in `deploy/charts/supersecretmessage/`:
