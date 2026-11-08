@@ -22,7 +22,7 @@ Always reference these instructions first and fallback to search or bash command
 ### Download Dependencies and Build
 - Download Go modules: `go mod download` -- takes 1-2 minutes. NEVER CANCEL. Set timeout to 180+ seconds.
 - Build binary: `go build -o sup3rs3cret cmd/sup3rS3cretMes5age/main.go` -- takes <1 second after dependencies downloaded.
-- Install linter: `curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.15.0` -- takes 30-60 seconds. Current system has v2.15.0.
+- Install linter: `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0` -- takes 30-60 seconds. (The upstream `install.sh` fails checksum verification for v2.15.0 because its pattern also matches the release's `.sbom.json` entry.) Current system has v2.15.0.
 
 ### Testing and Validation
 - Run unit tests: `make test` (2-3 minutes). NEVER CANCEL. Set timeout to 300+ seconds.
