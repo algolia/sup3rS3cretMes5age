@@ -2,7 +2,7 @@ package internal
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"mime/multipart"
 	"net/http"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type FakeSecretMsgStorer struct {
@@ -84,13 +85,15 @@ func TestGetMsgHandler(t *testing.T) {
 			err := h.GetMsgHandler(c)
 
 			if tt.expectError {
-				assert.Error(t, err)
-				if assert.IsType(t, &echo.HTTPError{}, err) {
-					v, _ := err.(*echo.HTTPError)
-					assert.Equal(t, tt.expectedStatus, v.Code)
+				var he *echo.HTTPError
+				require.ErrorAs(t, err, &he)
+				assert.Equal(t, tt.expectedStatus, he.Code)
+				if tt.expectedStatus == http.StatusBadRequest {
+					// Token validation must run before any Vault lookup (path-injection guard).
+					assert.Empty(t, s.lastUsedToken)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.token, s.lastUsedToken)
 				assert.Equal(t, tt.expectedStatus, rec.Code)
 				assert.Equal(t, tt.expectedMsg, rec.Body.String())
@@ -133,21 +136,55 @@ func TestIsValidTTL(t *testing.T) {
 		{"30m", true},
 		{"2h30m", true},
 		{"48h", true},
-		{"168h", true},     // 7 days - maximum
-		{"169h", false},    // exceeds maximum
-		{"30s", false},     // below minimum
-		{"0h", false},      // zero duration
-		{"", false},        // empty
-		{"invalid", false}, // invalid format
-		{"1d", false},      // 'd' not supported by Go
-		{"-1h", false},     // negative duration
+		{"168h", true},      // 7 days - maximum
+		{"169h", false},     // exceeds maximum
+		{"30s", false},      // below minimum
+		{"0h", false},       // zero duration
+		{"", false},         // empty
+		{"invalid", false},  // invalid format
+		{"1d", false},       // 'd' not supported by Go
+		{"-1h", false},      // negative duration
+		{"1m", true},        // minimum
+		{"59s", false},      // just below minimum
+		{"168h0m1s", false}, // just above maximum
 	}
 
 	for _, tt := range tests {
-		result := isValidTTL(tt.ttl)
-		assert.Equal(t, result, tt.valid)
+		t.Run(tt.ttl, func(t *testing.T) {
+			assert.Equal(t, tt.valid, isValidTTL(tt.ttl))
+		})
 	}
 }
+
+func TestValidateVaultToken(t *testing.T) {
+	tests := []struct {
+		name  string
+		token string
+		valid bool
+	}{
+		{"hvs 24 chars", "hvs." + strings.Repeat("A", 24), true},
+		{"hvb 24 chars", "hvb." + strings.Repeat("a", 24), true},
+		{"legacy 93 chars", "hvs." + strings.Repeat("a_-", 31), true},
+		{"empty", "", false},
+		{"legacy s. prefix", "s." + strings.Repeat("A", 24), false},
+		{"hvs 23 chars", "hvs." + strings.Repeat("A", 23), false},
+		{"hvs 25 chars", "hvs." + strings.Repeat("A", 25), false},
+		{"path traversal", "hvs." + strings.Repeat("A", 22) + "/..", false},
+		{"legacy one short", "hvs." + strings.Repeat("a", 90), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateVaultToken(tt.token)
+			if tt.valid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
 func TestValidateMsg(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -203,14 +240,14 @@ func TestCreateMsgHandler(t *testing.T) {
 			err := h.CreateMsgHandler(c)
 
 			if tt.errMessage != "" {
-				assert.Error(t, err)
-				if httpErr, ok := err.(*echo.HTTPError); ok {
-					assert.Equal(t, http.StatusBadRequest, httpErr.Code)
-					assert.Equal(t, tt.errMessage, httpErr.Message)
-				}
+				var he *echo.HTTPError
+				require.ErrorAs(t, err, &he)
+				assert.Equal(t, http.StatusBadRequest, he.Code)
+				assert.Equal(t, tt.errMessage, he.Message)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, http.StatusOK, rec.Code)
+				assert.Equal(t, "{\"token\":\"testtoken\"}\n", rec.Body.String())
 				assert.Equal(t, tt.msg, s.lastMsg)
 			}
 		})
@@ -331,18 +368,17 @@ func TestCreateMsgHandlerWithFile(t *testing.T) {
 			handlerErr := h.CreateMsgHandler(c)
 
 			if tt.expectError {
-				assert.Error(t, handlerErr)
-				if httpErr, ok := handlerErr.(*echo.HTTPError); ok {
-					assert.Equal(t, tt.expectedCode, httpErr.Code)
-				}
+				var he *echo.HTTPError
+				require.ErrorAs(t, handlerErr, &he)
+				assert.Equal(t, tt.expectedCode, he.Code)
 			} else {
-				assert.NoError(t, handlerErr)
+				require.NoError(t, handlerErr)
 				assert.Equal(t, tt.expectedCode, rec.Code)
 
 				// Parse response
 				var response TokenResponse
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 
 				if tt.checkToken {
 					assert.Equal(t, "msg-token-123", response.Token)
