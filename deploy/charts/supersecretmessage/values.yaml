@@ -49,8 +49,9 @@ config:
 # against a slow-but-starting Vault. The startup probe delays liveness
 # checks until the application answers /health.
 startupProbe:
-  # Same port that .Values.config.server.env "SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS" binds
-  port: "80"
+  # No port set: the template defaults to the named container port "http"
+  # (deployment.yaml), which follows .Values.service.port — so overriding
+  # the app's binding address and service port keeps the probes correct.
   # Path of probe (see livenessProbe: /health, not /msg)
   path: "/health"
   # When a probe fails, Kubernetes will try failureThreshold times before giving up
@@ -66,8 +67,7 @@ startupProbe:
   scheme: "HTTP"
 # Used to define custom livenessProbe settings
 livenessProbe:
-  # It it the same that .Values.config.server.env. "SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS"
-  port: "80"
+  # No port set: defaults to the named container port "http" (see startupProbe).
   # Path of probe: /health is the purpose-built health endpoint (light,
   # and excluded from the app's access logs — /msg would render a full
   # page on every probe).
@@ -85,8 +85,7 @@ livenessProbe:
   scheme: "HTTP"
 # Used to define custom readinessProbe settings
 readinessProbe:
-  # It it the same that .Values.config.server.env. "SUPERSECRETMESSAGE_HTTP_BINDING_ADDRESS"
-  port: "80"
+  # No port set: defaults to the named container port "http" (see startupProbe).
   # Path of probe (see livenessProbe: /health, not /msg)
   path: "/health"
   # When a probe fails, Kubernetes will try failureThreshold times before giving up
