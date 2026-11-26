@@ -328,6 +328,20 @@ func containsIP(networks []*net.IPNet, ip net.IP) bool {
 // security headers (CSP, XSS protection, HSTS), body size limits (50MB), and panic recovery.
 // Middleware is applied in order: pre-routing (HTTPS redirect), then request-level middleware.
 func setupMiddlewares(e *echo.Echo, cnf conf) {
+	// Echo only believes X-Forwarded-Proto (used by the HTTPS redirect and
+	// HSTS) from loopback, link-local and private-network peers, which covers
+	// in-cluster ingress controllers. A proxy connecting from a public
+	// address (e.g. a cloud load balancer) must be declared in
+	// SUPERSECRETMESSAGE_TRUSTED_PROXIES, otherwise its header is ignored and
+	// the redirect loops.
+	if len(cnf.TrustedProxies) > 0 {
+		trust := make([]echo.TrustOption, 0, len(cnf.TrustedProxies))
+		for _, network := range cnf.TrustedProxies {
+			trust = append(trust, echo.TrustIPRange(network))
+		}
+		e.SchemeExtractor = echo.ExtractSchemeFromHeaders(trust...)
+	}
+
 	if cnf.HttpsRedirectEnabled {
 		e.Pre(middleware.HTTPSRedirect())
 	}

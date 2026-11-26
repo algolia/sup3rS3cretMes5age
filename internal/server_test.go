@@ -609,3 +609,51 @@ func TestAccessLogRemoteIPMatchesRateLimitIdentity(t *testing.T) {
 		})
 	}
 }
+
+// TestHTTPSRedirectForwardedProto pins how the HTTPS redirect decides the
+// request scheme: X-Forwarded-Proto is honored from private-network peers
+// (in-cluster ingress) and from peers listed in TrustedProxies (e.g. a
+// cloud load balancer with a public address), and ignored from any other
+// peer so a client cannot skip the redirect by sending the header itself.
+func TestHTTPSRedirectForwardedProto(t *testing.T) {
+	tests := []struct {
+		name         string
+		trustedProxy string
+		remoteAddr   string
+		proto        string
+		wantRedirect bool
+	}{
+		{"private peer, https forwarded", "", "10.0.0.1:55555", "https", false},
+		{"private peer, http forwarded", "", "10.0.0.1:55555", "http", true},
+		{"public peer, header ignored", "", "203.0.113.9:55555", "https", true},
+		{"public peer listed as trusted proxy", "203.0.113.0/24", "203.0.113.9:55555", "https", false},
+		{"public peer outside trusted proxies", "198.51.100.0/24", "203.0.113.9:55555", "https", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cnf := conf{
+				HttpBindingAddress:   ":8080",
+				VaultPrefix:          "cubbyhole/",
+				HttpsRedirectEnabled: true,
+				TrustedProxies:       parseTrustedProxies(tt.trustedProxy),
+			}
+			e := echo.New()
+			setupMiddlewares(e, cnf)
+			e.GET("/health", func(c echo.Context) error { return c.String(http.StatusOK, "ok") })
+
+			req := httptest.NewRequest(http.MethodGet, "http://example.com/health", nil)
+			req.RemoteAddr = tt.remoteAddr
+			req.Header.Set("X-Forwarded-Proto", tt.proto)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			if tt.wantRedirect {
+				assert.Equal(t, http.StatusMovedPermanently, rec.Code)
+				assert.Equal(t, "https://example.com/health", rec.Header().Get("Location"))
+			} else {
+				assert.Equal(t, http.StatusOK, rec.Code)
+			}
+		})
+	}
+}
