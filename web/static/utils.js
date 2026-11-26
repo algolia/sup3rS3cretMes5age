@@ -322,49 +322,55 @@ export function setupLanguage() {
     // Load the language list before detection/translation: it drives both
     await loadLanguageManifest();
 
-  const currentLanguage = detectLanguage();
+    const currentLanguage = detectLanguage();
 
-  // Apply the direction now, before the locale fetch: an RTL user must not
-  // see the page laid out LTR until the translations arrive. lang stays
-  // untouched until the text is actually translated; if the fetch fails,
-  // setDocumentLanguage below restores the direction of the fallback.
-  setDocumentDirection(currentLanguage);
+    // Apply the direction now, before the locale fetch: an RTL user must not
+    // see the page laid out LTR until the translations arrive. lang stays
+    // untouched until the text is actually translated; if the fetch fails,
+    // setDocumentLanguage below restores the direction of the fallback.
+    setDocumentDirection(currentLanguage);
 
-  // Increment request ID and use it for the initial load to avoid races
-  const currentRequestId = ++translationRequestId;
-  const appliedLanguage = await loadTranslations(currentLanguage, currentRequestId);
+    // Increment request ID and use it for the initial load to avoid races
+    const currentRequestId = ++translationRequestId;
+    const appliedLanguage = await loadTranslations(currentLanguage, currentRequestId);
 
-  // If a newer language request was made while we were loading, abort
-  if (currentRequestId !== translationRequestId || appliedLanguage === null) {
-    return;
-  }
-
-  // Set HTML lang attribute and selector value from the language actually
-  // rendered (may be the English fallback if the requested one failed)
-  setDocumentLanguage(appliedLanguage);
-
-  const languageSelect = document.getElementById('language-select');
-
-  if (languageSelect) {
-    // Build the selector from the manifest — the same source of truth the
-    // server uses — instead of hardcoded <option> markup.
-    languageSelect.replaceChildren(...supportedLanguages.map(code => {
-      const option = document.createElement('option');
-      option.value = code;
-      option.textContent = nativeLanguageName(code);
-      return option;
-    }));
-    // Ensure selector reflects current language
-    if (languageSelect.value !== appliedLanguage) {
-      languageSelect.value = appliedLanguage;
+    // If a newer language request was made while we were loading, abort
+    if (currentRequestId !== translationRequestId || appliedLanguage === null) {
+      return;
     }
-    // Localized accessible name: aria-label is not covered by data-i18n
-    languageSelect.setAttribute('aria-label', translate('select_language', 'Select language'));
-    // Add event listener for language selector (CSP-compliant)
-    languageSelect.addEventListener('change', function() {
-      switchLanguage(this.value);
-    });
-  }
+
+    // Set HTML lang attribute and selector value from the language actually
+    // rendered (may be the English fallback if the requested one failed)
+    setDocumentLanguage(appliedLanguage);
+
+    const languageSelect = document.getElementById('language-select');
+
+    if (languageSelect) {
+      // Build the selector from the manifest — the same source of truth the
+      // server uses — instead of hardcoded <option> markup.
+      // Manifest unavailable (or a single language): nothing to choose from,
+    // so hide the control rather than show an empty dropdown. The page
+    // keeps working in the shipped English.
+    if (supportedLanguages.length < 2) {
+      (languageSelect.closest('.language-selector') || languageSelect).hidden = true;
+    }
+    languageSelect.replaceChildren(...supportedLanguages.map(code => {
+        const option = document.createElement('option');
+        option.value = code;
+        option.textContent = nativeLanguageName(code);
+        return option;
+      }));
+      // Ensure selector reflects current language
+      if (languageSelect.value !== appliedLanguage) {
+        languageSelect.value = appliedLanguage;
+      }
+      // Localized accessible name: aria-label is not covered by data-i18n
+      languageSelect.setAttribute('aria-label', translate('select_language', 'Select language'));
+      // Add event listener for language selector (CSP-compliant)
+      languageSelect.addEventListener('change', function() {
+        switchLanguage(this.value);
+      });
+    }
   })();
 
   languagePromise = ready;

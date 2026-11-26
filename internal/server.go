@@ -462,7 +462,7 @@ func setupMiddlewares(e *echo.Echo, cnf conf) {
 		// in application.css's .hidden utility). getmsg.js/index.js reveal
 		// elements by assigning element.style — a JS property, never
 		// restricted by inline-style CSP rules.
-		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'",
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'",
 	}))
 
 	e.Use(middleware.BodyLimit("50M"))

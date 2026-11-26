@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -46,6 +47,35 @@ func TestLocalesManifestMatchesDirectory(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(data, &manifest))
 	assert.Equal(t, langs, manifest.Languages)
+}
+
+// TestLocalesHaveSameKeysAsEnglish fails when a locale file misses or adds a
+// key relative to en.json. A missing key would otherwise degrade silently:
+// the client falls back to the shipped English text for it.
+func TestLocalesHaveSameKeysAsEnglish(t *testing.T) {
+	const dir = "../web/static/locales"
+
+	readKeys := func(name string) []string {
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		require.NoError(t, err, name)
+		var m map[string]string
+		require.NoError(t, json.Unmarshal(data, &m), name)
+		keys := make([]string, 0, len(m))
+		for k := range m {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		return keys
+	}
+
+	want := readKeys("en.json")
+	files, err := filepath.Glob(filepath.Join(dir, "*.json"))
+	require.NoError(t, err)
+	require.NotEmpty(t, files)
+	for _, f := range files {
+		name := filepath.Base(f)
+		assert.Equal(t, want, readKeys(name), "%s must have exactly the keys of en.json", name)
+	}
 }
 
 type FakeSecretMsgStorer struct {
