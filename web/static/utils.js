@@ -113,6 +113,17 @@ export function primaryLanguageTag(tag) {
   return String(tag ?? '').trim().toLowerCase().split(/[-_]/)[0];
 }
 
+// Right-to-left languages among the shipped locales. Extend when adding
+// another RTL locale (ar, fa, ur, …).
+const RTL_LANGUAGES = ['he'];
+
+// Reflect the displayed language on <html>: lang for accessibility and
+// dir so RTL scripts lay out correctly.
+function setDocumentLanguage(language) {
+  document.documentElement.setAttribute('lang', language);
+  document.documentElement.setAttribute('dir', RTL_LANGUAGES.includes(language) ? 'rtl' : 'ltr');
+}
+
 // Validate if the language is supported
 export function isValidLanguage(lang) {
   return supportedLanguages.includes(lang);
@@ -281,7 +292,7 @@ export async function switchLanguage(newLanguage) {
   }
 
   // Update HTML lang attribute for accessibility
-  document.documentElement.setAttribute('lang', appliedLanguage);
+  setDocumentLanguage(appliedLanguage);
 
   // Update language selector value
   const languageSelect = document.getElementById('language-select');
@@ -319,7 +330,7 @@ export function setupLanguage() {
 
   // Set HTML lang attribute and selector value from the language actually
   // rendered (may be the English fallback if the requested one failed)
-  document.documentElement.setAttribute('lang', appliedLanguage);
+  setDocumentLanguage(appliedLanguage);
 
   const languageSelect = document.getElementById('language-select');
 
