@@ -23,7 +23,7 @@ Read more about the reasoning behind this project in the [relevant blog post](ht
 - **🔐 Vault-Backed Security**: Uses HashiCorp Vault's cubbyhole for tamper-proof storage
 - **🎫 One-Time Tokens**: Vault tokens with exactly 2 uses (create + retrieve)
 - **🚦 Rate Limiting**: Built-in protection (10 requests/second, burst 20)
-- **🌍 Multi-Language Support**: Interface available in 5 languages (EN, FR, DE, ES, IT)
+- **🌍 Multi-Language Support**: Interface available in 6 languages (EN, FR, DE, ES, IT, PL)
   - Automatic language detection from browser preferences
   - URL-based language selection (`?lang=fr`)
   - Dynamic switching without page reload
@@ -67,7 +67,7 @@ The web interface is built with modern **vanilla JavaScript** (ES6 modules) and 
 
 📦 **Total JavaScript bundle size**: 8.9KB (previously 98KB with jQuery)
 
-🌍 **Internationalization**: 5 languages supported (English, French, German, Spanish, Italian)
+🌍 **Internationalization**: 6 languages supported (English, French, German, Spanish, Italian, Polish)
 - Translations loaded asynchronously on-demand
 - Browser language auto-detection
 - Seamless language switching without page reload
@@ -415,7 +415,7 @@ SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH=/mnt/ssl/key_secrets.example.com.pem
 
 ## 🌍 Multi-Language Support
 
-The application supports 5 languages with automatic detection and seamless switching:
+The application supports 6 languages with automatic detection and seamless switching:
 
 ### Supported Languages
 
@@ -426,6 +426,7 @@ The application supports 5 languages with automatic detection and seamless switc
 | 🇩🇪 German | `de` | Complete (25 keys) |
 | 🇪🇸 Spanish | `es` | Complete (25 keys) |
 | 🇮🇹 Italian | `it` | Complete (25 keys) |
+| 🇵🇱 Polish | `pl` | Complete (25 keys) |
 
 ### Usage
 
@@ -552,7 +553,8 @@ go vet ./...
 │       ├── fr.json          # French (25 keys)
 │       ├── de.json          # German (25 keys)
 │       ├── es.json          # Spanish (25 keys)
-│       └── it.json          # Italian (25 keys)
+│       ├── it.json          # Italian (25 keys)
+│       └── pl.json          # Polish (25 keys)
 ├── deploy/                   # Deployment configs
 │   ├── Dockerfile           # Multi-stage build with security hardening
 │   ├── docker-compose.yml   # Local dev stack with resource limits
