@@ -2,7 +2,7 @@
   "secret_message": "Message Secret",
   "send_secret_message": "Envoyez un message secret à usage unique et en lecture seule",
   "paste_message": "Collez votre message ici",
-  "upload_file": "Télécharger un fichier secret :",
+  "upload_file": "Téléverser un fichier secret :",
   "choose_file": "Choisir un fichier",
   "no_file_chosen": "Aucun fichier sélectionné",
   "time_to_expire": "Temps d'expiration :",

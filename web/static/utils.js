@@ -117,11 +117,16 @@ export function primaryLanguageTag(tag) {
 // another RTL locale (fa, ur, …).
 const RTL_LANGUAGES = ['ar', 'he'];
 
+// Text direction for a language: RTL scripts must lay out right-to-left.
+function setDocumentDirection(language) {
+  document.documentElement.setAttribute('dir', RTL_LANGUAGES.includes(language) ? 'rtl' : 'ltr');
+}
+
 // Reflect the displayed language on <html>: lang for accessibility and
 // dir so RTL scripts lay out correctly.
 function setDocumentLanguage(language) {
   document.documentElement.setAttribute('lang', language);
-  document.documentElement.setAttribute('dir', RTL_LANGUAGES.includes(language) ? 'rtl' : 'ltr');
+  setDocumentDirection(language);
 }
 
 // Validate if the language is supported
@@ -318,6 +323,12 @@ export function setupLanguage() {
     await loadLanguageManifest();
 
   const currentLanguage = detectLanguage();
+
+  // Apply the direction now, before the locale fetch: an RTL user must not
+  // see the page laid out LTR until the translations arrive. lang stays
+  // untouched until the text is actually translated; if the fetch fails,
+  // setDocumentLanguage below restores the direction of the fallback.
+  setDocumentDirection(currentLanguage);
 
   // Increment request ID and use it for the initial load to avoid races
   const currentRequestId = ++translationRequestId;
