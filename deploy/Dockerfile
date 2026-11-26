@@ -85,11 +85,11 @@ LABEL org.opencontainers.image.title="sup3rS3cretMes5age" \
 # Install only necessary certificates and packages. Package versions are
 # not pinned (hadolint DL3018 ignored): they track the pinned alpine 3.22
 # release, and exact pins break on alpine point releases.
-# hadolint ignore=DL3018
-RUN apk add --no-cache \
+# hadolint ignore=DL3017,DL3018
+RUN apk upgrade --no-cache \
+    && apk add --no-cache \
     ca-certificates \
     tzdata \
-    curl \
     && rm -rf /var/cache/apk/*
 
 # Create non-root user with restricted permissions
