@@ -306,7 +306,7 @@ o secret-file.txt
 * `SUPERSECRETMESSAGE_TLS_CERT_FILEPATH`: certificate filepath to use for "manual" TLS.
 * `SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH`: certificate key filepath to use for "manual" TLS.
 * `SUPERSECRETMESSAGE_VAULT_PREFIX`: vault prefix for secrets (default `cubbyhole/`)
-* `SUPERSECRETMESSAGE_TRUSTED_PROXIES`: comma-separated list of trusted proxy IP addresses or CIDR networks (e.g. `10.0.0.1,192.168.0.0/16`). When set, clients are identified from `X-Forwarded-For` **only** for requests whose connection peer is one of these proxies; otherwise the connection peer itself is used. Leave unset when the application is directly exposed: without it, `X-Forwarded-For` is never honored, which prevents rate-limit bypass through spoofed headers.
+* `SUPERSECRETMESSAGE_TRUSTED_PROXIES`: comma-separated list of trusted proxy IP addresses or CIDR networks (e.g. `10.0.0.1,192.168.0.0/16`). When set, clients are identified from `X-Forwarded-For` **only** for requests whose connection peer is one of these proxies; otherwise the connection peer itself is used. Leave unset when the application is directly exposed: without it, `X-Forwarded-For` is never honored, which prevents rate-limit bypass through spoofed headers. The same list decides whose `X-Forwarded-Proto` is believed by the HTTPS redirect and HSTS: private-network peers (the usual in-cluster ingress controller) are always trusted, but a proxy or load balancer connecting from a **public** address must be listed here, otherwise `SUPERSECRETMESSAGE_HTTPS_REDIRECT_ENABLED=true` redirects in a loop. That proxy must also overwrite `X-Forwarded-Proto` rather than pass the client's value through.
 
 ## Configuration examples
 
