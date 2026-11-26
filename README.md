@@ -23,7 +23,7 @@ Read more about the reasoning behind this project in the [relevant blog post](ht
 - **🔐 Vault-Backed Security**: Uses HashiCorp Vault's cubbyhole for tamper-proof storage
 - **🎫 One-Time Tokens**: Vault tokens with exactly 2 uses (create + retrieve)
 - **🚦 Rate Limiting**: Built-in protection (10 requests/second, burst 20)
-- **🌍 Multi-Language Support**: Interface available in 7 languages (EN, FR, DE, ES, IT, PL, HE)
+- **🌍 Multi-Language Support**: Interface available in 8 languages (AR, EN, FR, DE, HE, IT, PL, ES)
   - Automatic language detection from browser preferences
   - URL-based language selection (`?lang=fr`)
   - Dynamic switching without page reload
@@ -67,7 +67,7 @@ The web interface is built with modern **vanilla JavaScript** (ES6 modules) and 
 
 📦 **Total JavaScript bundle size**: 8.9KB (previously 98KB with jQuery)
 
-🌍 **Internationalization**: 7 languages supported (English, French, German, Spanish, Italian, Polish, Hebrew)
+🌍 **Internationalization**: 8 languages supported (Arabic, English, French, German, Hebrew, Italian, Polish, Spanish)
 - Translations loaded asynchronously on-demand
 - Browser language auto-detection
 - Seamless language switching without page reload
@@ -415,19 +415,20 @@ SUPERSECRETMESSAGE_TLS_CERT_KEY_FILEPATH=/mnt/ssl/key_secrets.example.com.pem
 
 ## 🌍 Multi-Language Support
 
-The application supports 7 languages with automatic detection and seamless switching:
+The application supports 8 languages with automatic detection and seamless switching:
 
 ### Supported Languages
 
 | Language | Code | Translation Coverage |
 |----------|------|---------------------|
+| 🇸🇦 Arabic | `ar` | Complete (25 keys, right-to-left) |
 | 🇬🇧 English | `en` | Complete (25 keys) |
 | 🇫🇷 French | `fr` | Complete (25 keys) |
 | 🇩🇪 German | `de` | Complete (25 keys) |
-| 🇪🇸 Spanish | `es` | Complete (25 keys) |
+| 🇮🇱 Hebrew | `he` | Complete (25 keys, right-to-left) |
 | 🇮🇹 Italian | `it` | Complete (25 keys) |
 | 🇵🇱 Polish | `pl` | Complete (25 keys) |
-| 🇮🇱 Hebrew | `he` | Complete (25 keys, right-to-left) |
+| 🇪🇸 Spanish | `es` | Complete (25 keys) |
 
 ### Usage
 
@@ -550,13 +551,14 @@ go vet ./...
 │   ├── fonts/               # Self-hosted font files
 │   ├── icons/               # Favicon / PWA icons
 │   └── locales/             # Translation files
+│       ├── ar.json          # Arabic (25 keys, RTL)
 │       ├── en.json          # English (25 keys)
 │       ├── fr.json          # French (25 keys)
 │       ├── de.json          # German (25 keys)
-│       ├── es.json          # Spanish (25 keys)
+│       ├── he.json          # Hebrew (25 keys, RTL)
 │       ├── it.json          # Italian (25 keys)
 │       ├── pl.json          # Polish (25 keys)
-│       └── he.json          # Hebrew (25 keys, RTL)
+│       └── es.json          # Spanish (25 keys)
 ├── deploy/                   # Deployment configs
 │   ├── Dockerfile           # Multi-stage build with security hardening
 │   ├── docker-compose.yml   # Local dev stack with resource limits

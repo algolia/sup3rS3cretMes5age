@@ -114,8 +114,8 @@ export function primaryLanguageTag(tag) {
 }
 
 // Right-to-left languages among the shipped locales. Extend when adding
-// another RTL locale (ar, fa, ur, …).
-const RTL_LANGUAGES = ['he'];
+// another RTL locale (fa, ur, …).
+const RTL_LANGUAGES = ['ar', 'he'];
 
 // Reflect the displayed language on <html>: lang for accessibility and
 // dir so RTL scripts lay out correctly.
